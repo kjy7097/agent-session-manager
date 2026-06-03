@@ -1,0 +1,78 @@
+"""Windows ConPTY supervisor for one `claude --remote-control` launch.
+
+The POSIX path uses pty.fork(); Windows has no fork, so we drive a real
+pseudo-console via pywinpty. Spawned detached by the agent (DETACHED_PROCESS),
+this process owns the ConPTY for the session's lifetime, auto-confirms the
+one-time "trust this folder" prompt, then drains output until Claude exits.
+The agent discovers the session via ~/.claude/sessions/<pid>.json (it does not
+read anything back from here).
+
+Usage:
+    python launcher_win.py <folder> <name> <resume_id|''> <0|1 fork> <claude_path>
+"""
+import os
+import re
+import sys
+import threading
+import time
+
+ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
+
+
+def main() -> int:
+    folder = os.path.realpath(os.path.expanduser(sys.argv[1]))
+    name = sys.argv[2]
+    resume_id = sys.argv[3]
+    fork = sys.argv[4] == "1"
+    claude_path = sys.argv[5]
+
+    if not os.path.isdir(folder):
+        sys.stderr.write(f"launcher_win: folder not found: {folder}\n")
+        return 2
+
+    argv = [claude_path, "--remote-control", name]
+    if resume_id:
+        argv += ["-r", resume_id]
+        if fork:
+            argv += ["--fork-session"]
+
+    from winpty import PtyProcess
+
+    proc = PtyProcess.spawn(argv, cwd=folder, dimensions=(40, 120))
+
+    trust_sent = [0]
+    last = [0.0]
+    buf = [""]
+
+    def drain():
+        while True:
+            try:
+                data = proc.read(2048)
+            except EOFError:
+                break
+            except Exception:
+                break
+            if not data:
+                time.sleep(0.1)
+                continue
+            buf[0] = (buf[0] + data)[-8000:]
+            norm = ANSI.sub("", buf[0]).lower().replace(" ", "").replace("\n", "").replace("\r", "")
+            if "trust" in norm and trust_sent[0] < 3 and time.time() - last[0] > 1.5:
+                try:
+                    proc.write("\r")
+                except Exception:
+                    pass
+                trust_sent[0] += 1
+                last[0] = time.time()
+
+    t = threading.Thread(target=drain, daemon=True)
+    t.start()
+
+    # keep the ConPTY open for the lifetime of the session
+    while proc.isalive():
+        time.sleep(1.0)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
