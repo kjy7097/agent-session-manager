@@ -24,6 +24,8 @@
   .iconbtn { background:transparent; border:none; padding:3px 7px; font-size:15px; cursor:pointer; border-radius:5px; color:var(--muted); line-height:1; }
   .iconbtn:hover { background:var(--bg); color:var(--fg); }
   .iconbtn.del:hover { color:#f85149; }
+  .iconbtn.on { color:var(--accent); opacity:1; }
+  button.ghost.on { color:var(--accent); border-color:var(--accent); }
   #mobile-back, #mobile-menu { display:none; }
   .sec-title { font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin:4px 0 8px; }
   .mgrbar { display:flex; gap:6px; align-items:center; margin:2px 0 12px; padding-bottom:12px; border-bottom:1px solid var(--border); }
@@ -239,6 +241,11 @@ const shortPath = p=>{ const a=(p||"").split(/[\\/]/).filter(Boolean); return a.
 // pinned folders per machine (localStorage)
 const pins = mid=>{ try{return JSON.parse(localStorage.getItem("csm.pins."+mid)||"[]")}catch(e){return[]} };
 const setPins = (mid,a)=>localStorage.setItem("csm.pins."+mid, JSON.stringify([...new Set(a)]));
+// "pin to top" — folders (per machine) and sessions (global), localStorage
+const topF = mid=>{ try{return new Set(JSON.parse(localStorage.getItem("csm.topf."+mid)||"[]"))}catch(e){return new Set()} };
+function toggleTopFolder(mid,cwd){ const s=topF(mid); s.has(cwd)?s.delete(cwd):s.add(cwd); localStorage.setItem("csm.topf."+mid,JSON.stringify([...s])); loadNodeFolders(mById(mid)); }
+const topS = ()=>{ try{return new Set(JSON.parse(localStorage.getItem("csm.tops")||"[]"))}catch(e){return new Set()} };
+function toggleTopSession(mid,cwd,sid){ const s=topS(); s.has(sid)?s.delete(sid):s.add(sid); localStorage.setItem("csm.tops",JSON.stringify([...s])); const q=$("#ssearch"); loadSessionList(mid,cwd,q?q.value:""); }
 const addPin = (mid,cwd)=>setPins(mid,[...pins(mid),cwd]);
 const removePin = (mid,cwd)=>setPins(mid, pins(mid).filter(p=>p!==cwd));
 
@@ -278,9 +285,9 @@ async function loadNodeFolders(m){
   catch(e){ nf.innerHTML=`<div class="empty sm">${esc(e.message)}</div>`; return; }
   const have=new Set(folders.map(f=>f.cwd));
   for(const p of pins(m.id)) if(!have.has(p)) folders.push({cwd:p,session_count:0,last_activity:0});
-  const pinset=new Set(pins(m.id));
-  folders.forEach(f=>f.pinned=pinset.has(f.cwd));
-  folders.sort((a,b)=>(b.last_activity||0)-(a.last_activity||0)); // most-recent first
+  const pinset=new Set(pins(m.id)), topset=topF(m.id);
+  folders.forEach(f=>{ f.pinned=pinset.has(f.cwd); f.top=topset.has(f.cwd); });
+  folders.sort((a,b)=>((b.top?1:0)-(a.top?1:0)) || ((b.last_activity||0)-(a.last_activity||0))); // pinned-to-top first, then most-recent
   if(!folders.length){ nf.innerHTML=`<div class="empty sm">No folders — add with ＋</div>`; return; }
   const mj=JSON.stringify(m.id);
   const row=(f,hidden)=>{
@@ -290,11 +297,12 @@ async function loadNodeFolders(m){
     const meta=f.session_count?`${f.session_count} sessions · ${when}`:`<span style="color:var(--accent2)">📌 added</span>`;
     const trash=f.session_count?`<button class="iconbtn del" title="Delete all sessions in this folder" onclick='event.stopPropagation();delFolder(${mj},${cj},${f.session_count})'>🗑</button>`:"";
     const unpin=f.pinned?`<button class="iconbtn" title="Remove from list (unpin)" onclick='event.stopPropagation();unpinFolder(${mj},${cj})'>✕</button>`:"";
+    const topBtn=`<button class="iconbtn${f.top?" on":""}" title="${f.top?"Unpin from top":"Pin to top"}" onclick='event.stopPropagation();toggleTopFolder(${mj},${cj})'>📌</button>`;
     return `<div class="folder${hidden?" hidden":""}${act}" data-fkey="${esc(fkey(m.id,f.cwd))}" title="${esc(f.cwd)}" onclick='openFolder(${mj},${cj})'>
-      <div class="fcol"><div class="path">${esc(shortPath(f.cwd))}${f.pinned&&f.session_count?' 📌':''}${f.live?`<span class="livecount" title="${f.live} running session(s)">● ${f.live} live</span>`:''}</div><div class="meta">${meta}</div></div>
-      <div class="tools">${trash}${unpin}</div></div>`;
+      <div class="fcol"><div class="path">${f.top?'📌 ':''}${esc(shortPath(f.cwd))}${f.live?`<span class="livecount" title="${f.live} running session(s)">● ${f.live} live</span>`:''}</div><div class="meta">${meta}</div></div>
+      <div class="tools">${topBtn}${trash}${unpin}</div></div>`;
   };
-  const rows=folders.map((f,i)=>row(f,i>=3));
+  const rows=folders.map((f,i)=>row(f,i>=3 && !f.top));
   const more = folders.length>3 ? `<div class="more" data-n="${folders.length-3}" onclick="toggleMore(this)">Show more (${folders.length-3})</div>` : "";
   nf.innerHTML=rows.join("")+more;
 }
@@ -332,6 +340,9 @@ async function loadSessionList(mid,cwd,query){
   if(seq!==searchSeq) return; // a newer query superseded this one
   const m=mById(mid), mj=JSON.stringify(mid), cj=JSON.stringify(cwd);
   if(!sessions.length){ sl.innerHTML=`<div class="empty">${query?"No results":"No sessions yet. Start one with ＋ New session."}</div>`; return; }
+  const tset=topS();
+  sessions.forEach(s=>s._top=tset.has(s.session_id));
+  sessions.sort((a,b)=>(b._top?1:0)-(a._top?1:0)); // pinned sessions to the top (otherwise keep API order)
   sl.innerHTML=sessions.map(s=>{
     const when=s.last_activity?new Date(s.last_activity*1000).toLocaleString():"";
     const badges=`<span class="badge node">${osIcon(m.os)} ${esc(m.name)}</span>`+(s.is_remote_control?`<span class="badge rc">remote</span>`:"")+(s.is_live?`<span class="badge live">live</span>`:"");
@@ -339,14 +350,15 @@ async function loadSessionList(mid,cwd,query){
     const openBtn=s.is_live&&s.bridge_url?`<button class="primary" onclick='window.open(${JSON.stringify(s.bridge_url)},"_blank")'>Open</button>`:"";
     const stopBtn=s.is_live?`<button class="danger" onclick='stopSession(${mj},${cj},${sj})'>■ Stop</button>`:"";
     const snip=s.snippet?`<div class="snippet">…${esc(s.snippet)}</div>`:"";
-    return `<div class="session"><div class="row1"><span class="title">${esc(s.title)}</span>${badges}</div>
+    const pinBtn=`<button class="ghost${s._top?" on":""}" onclick='toggleTopSession(${mj},${cj},${sj})' title="${s._top?"Unpin from top":"Pin to top"}">${s._top?"📌 Pinned":"📌 Pin"}</button>`;
+    return `<div class="session"><div class="row1"><span class="title">${s._top?"📌 ":""}${esc(s.title)}</span>${badges}</div>
       <div class="sub">${esc(s.first_prompt||"")}</div>
       <div class="sub">${s.msg_count} messages · ${when} · ${esc(s.git_branch||"")} · <code>${s.session_id.slice(0,8)}</code></div>${snip}
       <div class="actions">${openBtn}
         <button onclick='preview(${mj},${cj},${sj})'>👁 Preview</button>
         <button onclick='resume(${mj},${cj},${sj},false)'>Resume</button>
         <button class="ghost" onclick='resume(${mj},${cj},${sj},true)'>Fork</button>
-        ${stopBtn}<button class="ghost danger" onclick='del(${mj},${cj},${sj},${s.is_live})'>Delete</button></div></div>`;
+        ${stopBtn}${pinBtn}<button class="ghost danger" onclick='del(${mj},${cj},${sj},${s.is_live})'>Delete</button></div></div>`;
   }).join("");
 }
 
