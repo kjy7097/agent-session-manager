@@ -31,6 +31,13 @@ from .config import load_config
 HERE = Path(__file__).resolve().parent
 IS_WIN = os.name == "nt"
 LAUNCHER = HERE / ("launcher_win.py" if IS_WIN else "launcher.py")
+# On Windows, run the launcher with pythonw (no console) + CREATE_NO_WINDOW so no
+# terminal window flashes when a session is launched.
+LAUNCH_EXE = sys.executable
+if IS_WIN and sys.executable.lower().endswith("python.exe"):
+    _pyw = sys.executable[:-len("python.exe")] + "pythonw.exe"
+    if os.path.exists(_pyw):
+        LAUNCH_EXE = _pyw
 
 # token -> {cwd, name, started, state, url, error}
 _launches: dict[str, dict] = {}
@@ -90,12 +97,12 @@ class Agent:
         fork = "1" if body.get("fork") else "0"
         token = secrets.token_hex(8)
         logf = open(self.log_dir / f"{token}.log", "wb")
-        argv = [sys.executable, str(LAUNCHER), cwd, name, resume_id, fork, self.claude_path]
+        argv = [LAUNCH_EXE, str(LAUNCHER), cwd, name, resume_id, fork, self.claude_path]
         kw = dict(stdin=subprocess.DEVNULL, stdout=logf, stderr=subprocess.STDOUT, close_fds=True)
         if IS_WIN:
             # detach so the session outlives the agent/SSH session
             kw["creationflags"] = (
-                subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+                subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP
             )
         else:
             kw["start_new_session"] = True
@@ -149,6 +156,40 @@ class Agent:
                     _launches[token].update(state="failed", error=err)
             rec.update(state="failed", error=err)
         return rec
+
+    def manager_open(self, cwd: str) -> dict:
+        """Open (or continue) the single persistent orchestration-manager session
+        in `cwd`, returning its claude.ai/code URL. Reuses a live one, else
+        resumes the most recent session there, else starts fresh. No prompt."""
+        cwd = os.path.realpath(os.path.expanduser(cwd))
+        os.makedirs(cwd, exist_ok=True)
+        for s in common.live_sessions():
+            if s.get("cwd") and os.path.realpath(s["cwd"]) == cwd and s.get("bridge_session_id"):
+                return {"ok": True, "sessionId": s["session_id"], "reused": True,
+                        "bridgeUrl": common.bridge_url(s["bridge_session_id"])}
+        past = common.list_sessions_for_cwd(cwd)
+        resume_id = past[0]["session_id"] if past else ""
+        started = time.time()
+        logf = open(self.log_dir / "manager.log", "wb")
+        argv = [LAUNCH_EXE, str(LAUNCHER), cwd, "csm-manager", resume_id, "0", self.claude_path]
+        kw = dict(stdin=subprocess.DEVNULL, stdout=logf, stderr=subprocess.STDOUT, close_fds=True)
+        if IS_WIN:
+            kw["creationflags"] = subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP
+        else:
+            kw["start_new_session"] = True
+        subprocess.Popen(argv, **kw)
+        while time.time() - started < 45:
+            time.sleep(1.5)
+            for s in common.live_sessions():
+                if not s.get("cwd") or not s.get("bridge_session_id"):
+                    continue
+                if os.path.realpath(s["cwd"]) != cwd:
+                    continue
+                st = (s.get("started_at") or 0) / 1000.0
+                if resume_id or not st or st >= started - 5:
+                    return {"ok": True, "sessionId": s["session_id"],
+                            "bridgeUrl": common.bridge_url(s["bridge_session_id"])}
+        return {"ok": False, "error": "timed out opening manager"}
 
     def delete(self, session_id: str) -> dict:
         return common.delete_session(session_id)
@@ -230,6 +271,8 @@ def _make_handler(agent: Agent):
                 if not body or not body.get("cwd"):
                     return self._send({"error": "cwd required"}, 400)
                 return self._send(agent.launch(body))
+            if u.path == "/manager":
+                return self._send(agent.manager_open((body or {}).get("cwd") or "~/.csm-manager"))
             if u.path == "/stop":
                 if not body or not body.get("sessionId"):
                     return self._send({"error": "sessionId required"}, 400)

@@ -57,10 +57,9 @@ def sync(include_empty: bool = True) -> dict:
         owners = [mid for mid in by_id if name in lists[mid]]
         winner = max(owners, key=lambda mid: lists[mid][name]["mtime"])
         whash = lists[winner][name]["hash"]
-        # only machines that already use skills participate as targets — don't
-        # blast the whole library onto an empty/infra box (e.g. the control host)
+        # all online machines converge to the newest version of each skill
         targets = [mid for mid in by_id
-                   if len(lists[mid]) > 0 and (lists[mid].get(name) or {}).get("hash") != whash]
+                   if (lists[mid].get(name) or {}).get("hash") != whash]
         if not targets:
             continue
         try:

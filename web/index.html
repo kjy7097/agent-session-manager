@@ -101,6 +101,7 @@
   <button class="ghost" id="mobile-back" onclick="showNav()">← Nodes</button>
   <h1>🟧 Agent Session Manager</h1>
   <span class="sp"></span>
+  <button class="primary" onclick="openManager()" title="Open the manager session (oversees all machines)">🎯 Manager</button>
   <button class="ghost" onclick="openAddMachine()">＋ Machine</button>
   <button class="ghost" onclick="loadRegistry()">↻</button>
 </header>
@@ -200,6 +201,15 @@ const isMobile = ()=>window.matchMedia("(max-width:760px)").matches;
 function showNav(){ document.body.classList.remove("content"); document.body.classList.add("nav"); }
 function showContent(){ if(isMobile()){ document.body.classList.remove("nav"); document.body.classList.add("content"); } }
 function toast(m,ms=2800){ const t=$("#toast"); t.textContent=m; t.classList.add("show"); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove("show"),ms); }
+// ---- manager session ----
+async function openManager(){
+  toast("Opening manager session…");
+  try{
+    const r = await (await fetch("/api/manager")).json();
+    if(r.bridgeUrl){ window.open(r.bridgeUrl,"_blank"); toast(r.reused?"Manager session (existing) opened":"Manager session started"); }
+    else toast("Failed: "+(r.error||"unknown"));
+  }catch(e){ toast("Error: "+e.message); }
+}
 const sleep = ms=>new Promise(r=>setTimeout(r,ms));
 const esc = s=>(s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const shortPath = p=>{ const a=(p||"").split(/[\\/]/).filter(Boolean); return a.length>2?"…/"+a.slice(-2).join("/"):p; };

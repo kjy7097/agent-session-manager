@@ -97,6 +97,8 @@ def _make_handler(cfg: dict):
                 return self._json({"machines": refresh()})
             if u.path == "/enroll":
                 return self._enroll()
+            if u.path == "/api/manager":
+                return self._manager()
             if u.path.startswith("/api/m/"):
                 return self._proxy("GET")
             return self._json({"error": "not found"}, 404)
@@ -186,6 +188,26 @@ def _make_handler(cfg: dict):
                            capture_output=True)
             refresh()
             return self._json({"ok": True})
+
+        def _manager(self):
+            # open/continue the persistent orchestration manager on the control host
+            cfg = load_config()
+            import os as _os
+            mdir = _os.path.expanduser("~/.csm-manager")
+            target = f"http://127.0.0.1:{cfg['agent']['port']}/manager"
+            req = urllib.request.Request(target, data=json.dumps({"cwd": mdir}).encode(), method="POST")
+            req.add_header("Authorization", f"Bearer {cfg['secret']}")
+            req.add_header("Content-Type", "application/json")
+            try:
+                with urllib.request.urlopen(req, timeout=60) as resp:
+                    data, status = resp.read(), resp.status
+            except urllib.error.URLError as e:
+                return self._json({"error": f"manager agent unreachable: {e.reason}"}, 502)
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
 
         def _enroll(self):
             try:
