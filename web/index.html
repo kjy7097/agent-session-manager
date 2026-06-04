@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -98,77 +98,77 @@
 </head>
 <body class="nav content">
 <header>
-  <button class="ghost" id="mobile-back" onclick="showNav()">← 노드</button>
+  <button class="ghost" id="mobile-back" onclick="showNav()">← Nodes</button>
   <h1>🟧 Agent Session Manager</h1>
   <span class="sp"></span>
-  <button class="ghost" onclick="openAddMachine()">＋ 머신</button>
+  <button class="ghost" onclick="openAddMachine()">＋ Machine</button>
   <button class="ghost" onclick="loadRegistry()">↻</button>
 </header>
 <div class="layout">
   <div class="sidebar">
-    <div class="sec-title">노드 / 폴더</div>
+    <div class="sec-title">Nodes / Folders</div>
     <div id="nodes"></div>
   </div>
   <div class="main" id="main">
-    <div class="empty">노드의 폴더를 고르세요. 폴더 추가는 각 PC 옆 <b>＋</b>, 새 세션은 폴더 안에서.</div>
+    <div class="empty">Pick a folder on a node. Add folders with the <b>＋</b> next to each machine; start a new session from inside a folder.</div>
   </div>
 </div>
 <div id="toast"></div>
 
 <div class="modal-bg" id="addm" onclick="if(event.target.id==='addm')closeAddM()">
   <div class="modal">
-    <h3>머신 추가</h3>
+    <h3>Add machine</h3>
     <div style="padding:14px 18px;font-size:13px;line-height:1.6">
-      <div style="color:var(--muted);margin-bottom:10px">새 컴퓨터의 <b>관리자 PowerShell</b>에서 1회 실행 (SSH키·OpenSSH·Python 준비):</div>
-      <div class="cmd" id="enroll-cmd" onclick="copyCmd(this)" title="클릭해서 복사"></div>
-      <div style="margin:8px 0 4px;color:var(--muted)">그 다음 아래 정보로 등록 → 자동 배포:</div>
+      <div style="color:var(--muted);margin-bottom:10px">Run once in an <b>elevated PowerShell</b> on the new computer (sets up SSH key · OpenSSH · Python):</div>
+      <div class="cmd" id="enroll-cmd" onclick="copyCmd(this)" title="Click to copy"></div>
+      <div style="margin:8px 0 4px;color:var(--muted)">Then register with the details below → auto-deploy:</div>
       <div style="display:grid;grid-template-columns:90px 1fr;gap:8px;align-items:center">
-        <label>닉네임</label><input id="am-name" class="searchbox" placeholder="예: 작업용 데스크탑">
-        <label>호스트/IP</label><input id="am-host" class="searchbox" placeholder="예: 192.168.1.50 또는 tailscale IP">
-        <label>SSH 유저</label><input id="am-user" class="searchbox" placeholder="예: alice">
-        <label>SSH 포트</label><input id="am-port" class="searchbox" value="22">
+        <label>Nickname</label><input id="am-name" class="searchbox" placeholder="e.g. Work desktop">
+        <label>Host/IP</label><input id="am-host" class="searchbox" placeholder="e.g. 192.168.1.50 or a tailscale IP">
+        <label>SSH user</label><input id="am-user" class="searchbox" placeholder="e.g. alice">
+        <label>SSH port</label><input id="am-port" class="searchbox" value="22">
       </div>
     </div>
     <div class="modal-foot"><span class="sp" style="flex:1"></span>
-      <button onclick="closeAddM()">취소</button>
-      <button class="primary" onclick="submitAddM()">등록 + 배포</button></div>
+      <button onclick="closeAddM()">Cancel</button>
+      <button class="primary" onclick="submitAddM()">Register + deploy</button></div>
   </div>
 </div>
 
 <div class="modal-bg" id="tx" onclick="if(event.target.id==='tx')closeTx()">
   <div class="modal wide">
-    <h3 id="tx-title">대화 미리보기</h3>
+    <h3 id="tx-title">Conversation preview</h3>
     <div class="msgs" id="tx-body"></div>
     <div class="modal-foot"><div class="cur" id="tx-meta"></div>
-      <button onclick="closeTx()">닫기</button>
-      <button onclick="txResume(false)">이어가기</button>
+      <button onclick="closeTx()">Close</button>
+      <button onclick="txResume(false)">Resume</button>
       <button class="ghost" onclick="txResume(true)">Fork</button></div>
   </div>
 </div>
 
 <div class="modal-bg" id="picker" onclick="if(event.target.id==='picker')closePicker()">
   <div class="modal">
-    <h3 id="pk-title">폴더 추가</h3>
+    <h3 id="pk-title">Add folder</h3>
     <div class="crumbs" id="pk-crumbs"></div>
     <div class="dirlist" id="pk-list"></div>
     <div class="pk-direct">
-      <input id="pk-path" placeholder="또는 경로 직접 입력 후 Enter" spellcheck="false" onkeydown="if(event.key==='Enter')pickTyped()">
-      <button onclick="pickTyped()">추가</button>
+      <input id="pk-path" placeholder="…or type a path and press Enter" spellcheck="false" onkeydown="if(event.key==='Enter')pickTyped()">
+      <button onclick="pickTyped()">Add</button>
     </div>
-    <div class="modal-foot"><div class="cur">선택: <code id="pk-cur"></code></div>
-      <button onclick="closePicker()">취소</button>
-      <button class="primary" onclick="pickHere()">＋ 이 폴더 추가</button></div>
+    <div class="modal-foot"><div class="cur">Selected: <code id="pk-cur"></code></div>
+      <button onclick="closePicker()">Cancel</button>
+      <button class="primary" onclick="pickHere()">＋ Add this folder</button></div>
   </div>
 </div>
 
 <div class="modal-bg" id="dlg" onclick="if(event.target.id==='dlg')dlgCancel()">
   <div class="modal" style="width:min(440px,94vw)">
-    <h3 id="dlg-title">확인</h3>
+    <h3 id="dlg-title">Confirm</h3>
     <div style="padding:16px 18px;white-space:pre-wrap;word-break:break-word" id="dlg-msg"></div>
     <div id="dlg-inwrap" style="padding:0 18px 8px"><input id="dlg-input" class="searchbox" spellcheck="false"></div>
     <div class="modal-foot"><span class="sp" style="flex:1"></span>
-      <button onclick="dlgCancel()">취소</button>
-      <button class="primary" id="dlg-ok" onclick="dlgOk()">확인</button></div>
+      <button onclick="dlgCancel()">Cancel</button>
+      <button class="primary" id="dlg-ok" onclick="dlgOk()">OK</button></div>
   </div>
 </div>
 
@@ -176,8 +176,8 @@
 const $ = s => document.querySelector(s);
 // in-app dialog (replaces native prompt/confirm)
 let _dlgRes=null, _dlgPrompt=false;
-function uiConfirm(msg,title){ return new Promise(r=>_openDlg(title||"확인",msg,false,r)); }
-function uiPrompt(msg,def,title){ return new Promise(r=>_openDlg(title||"입력",msg,true,r,def)); }
+function uiConfirm(msg,title){ return new Promise(r=>_openDlg(title||"Confirm",msg,false,r)); }
+function uiPrompt(msg,def,title){ return new Promise(r=>_openDlg(title||"Input",msg,true,r,def)); }
 function _openDlg(title,msg,isPrompt,res,def){
   _dlgRes=res; _dlgPrompt=isPrompt;
   $("#dlg-title").textContent=title; $("#dlg-msg").textContent=msg;
@@ -219,23 +219,23 @@ async function apiM(mid, path, opts){
 
 async function loadRegistry(){
   try{ MACHINES=(await (await fetch("/api/machines")).json()).machines; }
-  catch(e){ $("#nodes").innerHTML=`<div class="empty sm">레지스트리 로드 실패</div>`; return; }
+  catch(e){ $("#nodes").innerHTML=`<div class="empty sm">Failed to load registry</div>`; return; }
   renderSidebar();
 }
 function renderSidebar(){
   const host=$("#nodes"); host.innerHTML="";
   for(const m of MACHINES){
-    const status = !m.online?`<span class="badge">offline</span>` : m.agentReady?`<span class="badge live">agent</span>`:`<span class="badge">에이전트 없음</span>`;
+    const status = !m.online?`<span class="badge">offline</span>` : m.agentReady?`<span class="badge live">agent</span>`:`<span class="badge">no agent</span>`;
     const mj=JSON.stringify(m.id), nmj=JSON.stringify(m.name);
-    const plus = (m.online&&m.agentReady)?`<button class="iconbtn" title="이 PC에 폴더 추가" onclick='openPicker(${mj})'>＋</button>`:"";
-    const ren = `<button class="iconbtn" title="이름 변경" onclick='renameMachine(${mj},${nmj})'>✎</button>`;
-    const rem = m.is_self?"":`<button class="iconbtn del" title="머신 제거" onclick='removeMachine(${mj},${nmj})'>✕</button>`;
+    const plus = (m.online&&m.agentReady)?`<button class="iconbtn" title="Add folder on this machine" onclick='openPicker(${mj})'>＋</button>`:"";
+    const ren = `<button class="iconbtn" title="Rename" onclick='renameMachine(${mj},${nmj})'>✎</button>`;
+    const rem = m.is_self?"":`<button class="iconbtn del" title="Remove machine" onclick='removeMachine(${mj},${nmj})'>✕</button>`;
     const g=document.createElement("div"); g.className="nodegrp";
     g.innerHTML=`<div class="nodehead"><span>${osIcon(m.os)}</span><span class="nm">${esc(m.name)}</span>${status}${plus}${ren}${rem}</div>
       <div class="nodefolders" id="nf-${cssid(m.id)}"></div>`;
     host.appendChild(g);
     if(m.online&&m.agentReady) loadNodeFolders(m);
-    else g.querySelector(".nodefolders").innerHTML=`<div class="empty sm">${m.online?"Phase 2 예정 — 에이전트 미설치":"오프라인"}</div>`;
+    else g.querySelector(".nodefolders").innerHTML=`<div class="empty sm">${m.online?"No agent installed":"Offline"}</div>`;
   }
 }
 
@@ -249,24 +249,24 @@ async function loadNodeFolders(m){
   const pinset=new Set(pins(m.id));
   folders.forEach(f=>f.pinned=pinset.has(f.cwd));
   folders.sort((a,b)=>(b.last_activity||0)-(a.last_activity||0)); // most-recent first
-  if(!folders.length){ nf.innerHTML=`<div class="empty sm">폴더 없음 — ＋로 추가</div>`; return; }
+  if(!folders.length){ nf.innerHTML=`<div class="empty sm">No folders — add with ＋</div>`; return; }
   const mj=JSON.stringify(m.id);
   const row=(f,hidden)=>{
     const when=f.last_activity?new Date(f.last_activity*1000).toLocaleDateString():"";
     const cj=JSON.stringify(f.cwd);
     const act=(m.id===FOLDER_MACHINE && f.cwd===FOLDER)?" active":"";
-    const meta=f.session_count?`${f.session_count}개 · ${when}`:`<span style="color:var(--accent2)">📌 추가됨</span>`;
-    const trash=f.session_count?`<button class="iconbtn del" title="이 폴더 세션 전체 삭제" onclick='event.stopPropagation();delFolder(${mj},${cj},${f.session_count})'>🗑</button>`:"";
-    const unpin=f.pinned?`<button class="iconbtn" title="목록에서 제거(핀 해제)" onclick='event.stopPropagation();unpinFolder(${mj},${cj})'>✕</button>`:"";
+    const meta=f.session_count?`${f.session_count} sessions · ${when}`:`<span style="color:var(--accent2)">📌 added</span>`;
+    const trash=f.session_count?`<button class="iconbtn del" title="Delete all sessions in this folder" onclick='event.stopPropagation();delFolder(${mj},${cj},${f.session_count})'>🗑</button>`:"";
+    const unpin=f.pinned?`<button class="iconbtn" title="Remove from list (unpin)" onclick='event.stopPropagation();unpinFolder(${mj},${cj})'>✕</button>`:"";
     return `<div class="folder${hidden?" hidden":""}${act}" data-fkey="${esc(fkey(m.id,f.cwd))}" title="${esc(f.cwd)}" onclick='openFolder(${mj},${cj})'>
-      <div class="fcol"><div class="path">${esc(shortPath(f.cwd))}${f.pinned&&f.session_count?' 📌':''}${f.live?`<span class="livecount" title="실행 중 세션 ${f.live}개">● ${f.live} live</span>`:''}</div><div class="meta">${meta}</div></div>
+      <div class="fcol"><div class="path">${esc(shortPath(f.cwd))}${f.pinned&&f.session_count?' 📌':''}${f.live?`<span class="livecount" title="${f.live} running session(s)">● ${f.live} live</span>`:''}</div><div class="meta">${meta}</div></div>
       <div class="tools">${trash}${unpin}</div></div>`;
   };
   const rows=folders.map((f,i)=>row(f,i>=3));
-  const more = folders.length>3 ? `<div class="more" data-n="${folders.length-3}" onclick="toggleMore(this)">더보기 (${folders.length-3})</div>` : "";
+  const more = folders.length>3 ? `<div class="more" data-n="${folders.length-3}" onclick="toggleMore(this)">Show more (${folders.length-3})</div>` : "";
   nf.innerHTML=rows.join("")+more;
 }
-function toggleMore(btn){ const nf=btn.parentNode; const ex=nf.classList.toggle("expanded"); btn.textContent= ex?"접기":("더보기 ("+btn.dataset.n+")"); }
+function toggleMore(btn){ const nf=btn.parentNode; const ex=nf.classList.toggle("expanded"); btn.textContent= ex?"Show less":("Show more ("+btn.dataset.n+")"); }
 
 async function openFolder(mid,cwd){
   FOLDER=cwd; FOLDER_MACHINE=mid;
@@ -281,17 +281,17 @@ function renderFolderView(mid,cwd){
   const m=mById(mid), mj=JSON.stringify(mid), cj=JSON.stringify(cwd);
   $("#main").innerHTML=`<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
       <div style="flex:1;min-width:160px"><div class="sec-title">${osIcon(m.os)} ${esc(m.name)}</div><div style="word-break:break-all">${esc(cwd)}</div></div>
-      <button class="primary" onclick='launchIn(${mj},${cj})'>＋ 새 세션</button>
+      <button class="primary" onclick='launchIn(${mj},${cj})'>＋ New session</button>
       <button class="ghost" onclick='openFolder(${mj},${cj})'>↻</button></div>
-    <input class="searchbox" id="ssearch" placeholder="🔎 이 폴더에서 세션 검색 (제목·대화 내용)" spellcheck="false"
+    <input class="searchbox" id="ssearch" placeholder="🔎 Search sessions in this folder (title · conversation)" spellcheck="false"
        oninput='clearTimeout(searchTimer);searchTimer=setTimeout(()=>loadSessionList(${mj},${cj},this.value),300)'>
-    <div style="margin:12px 0 4px" id="slist"><div class="empty">불러오는 중…</div></div>`;
+    <div style="margin:12px 0 4px" id="slist"><div class="empty">Loading…</div></div>`;
   loadSessionList(mid,cwd,"");
 }
 async function loadSessionList(mid,cwd,query){
   const sl=$("#slist"); if(!sl) return;
   const seq=++searchSeq;
-  sl.innerHTML=`<div class="empty">${query?"🔎 검색 중…":"불러오는 중…"}</div>`;
+  sl.innerHTML=`<div class="empty">${query?"🔎 Searching…":"Loading…"}</div>`;
   let sessions;
   try{
     const path=query?`search?cwd=${encodeURIComponent(cwd)}&q=${encodeURIComponent(query)}`:`sessions?cwd=${encodeURIComponent(cwd)}`;
@@ -299,31 +299,31 @@ async function loadSessionList(mid,cwd,query){
   }catch(e){ if(seq===searchSeq) sl.innerHTML=`<div class="empty">${esc(e.message)}</div>`; return; }
   if(seq!==searchSeq) return; // a newer query superseded this one
   const m=mById(mid), mj=JSON.stringify(mid), cj=JSON.stringify(cwd);
-  if(!sessions.length){ sl.innerHTML=`<div class="empty">${query?"검색 결과 없음":"세션이 없습니다. ＋ 새 세션으로 시작하세요."}</div>`; return; }
+  if(!sessions.length){ sl.innerHTML=`<div class="empty">${query?"No results":"No sessions yet. Start one with ＋ New session."}</div>`; return; }
   sl.innerHTML=sessions.map(s=>{
     const when=s.last_activity?new Date(s.last_activity*1000).toLocaleString():"";
     const badges=`<span class="badge node">${osIcon(m.os)} ${esc(m.name)}</span>`+(s.is_remote_control?`<span class="badge rc">remote</span>`:"")+(s.is_live?`<span class="badge live">live</span>`:"");
     const sj=JSON.stringify(s.session_id);
-    const openBtn=s.is_live&&s.bridge_url?`<button class="primary" onclick='window.open(${JSON.stringify(s.bridge_url)},"_blank")'>열기</button>`:"";
-    const stopBtn=s.is_live?`<button class="danger" onclick='stopSession(${mj},${cj},${sj})'>■ 종료</button>`:"";
+    const openBtn=s.is_live&&s.bridge_url?`<button class="primary" onclick='window.open(${JSON.stringify(s.bridge_url)},"_blank")'>Open</button>`:"";
+    const stopBtn=s.is_live?`<button class="danger" onclick='stopSession(${mj},${cj},${sj})'>■ Stop</button>`:"";
     const snip=s.snippet?`<div class="snippet">…${esc(s.snippet)}</div>`:"";
     return `<div class="session"><div class="row1"><span class="title">${esc(s.title)}</span>${badges}</div>
       <div class="sub">${esc(s.first_prompt||"")}</div>
-      <div class="sub">${s.msg_count}개 메시지 · ${when} · ${esc(s.git_branch||"")} · <code>${s.session_id.slice(0,8)}</code></div>${snip}
+      <div class="sub">${s.msg_count} messages · ${when} · ${esc(s.git_branch||"")} · <code>${s.session_id.slice(0,8)}</code></div>${snip}
       <div class="actions">${openBtn}
-        <button onclick='preview(${mj},${cj},${sj})'>👁 미리보기</button>
-        <button onclick='resume(${mj},${cj},${sj},false)'>이어가기</button>
+        <button onclick='preview(${mj},${cj},${sj})'>👁 Preview</button>
+        <button onclick='resume(${mj},${cj},${sj},false)'>Resume</button>
         <button class="ghost" onclick='resume(${mj},${cj},${sj},true)'>Fork</button>
-        ${stopBtn}<button class="ghost danger" onclick='del(${mj},${cj},${sj},${s.is_live})'>삭제</button></div></div>`;
+        ${stopBtn}<button class="ghost danger" onclick='del(${mj},${cj},${sj},${s.is_live})'>Delete</button></div></div>`;
   }).join("");
 }
 
 async function preview(mid,cwd,sessionId){
-  TX={mid,cwd,sessionId}; $("#tx").classList.add("show"); $("#tx-body").innerHTML=`<div class="empty">불러오는 중…</div>`; $("#tx-meta").textContent="";
+  TX={mid,cwd,sessionId}; $("#tx").classList.add("show"); $("#tx-body").innerHTML=`<div class="empty">Loading…</div>`; $("#tx-meta").textContent="";
   try{ const d=await apiM(mid,`transcript?sessionId=${sessionId}`);
     if(d.error){ $("#tx-body").innerHTML=`<div class="empty">${esc(d.error)}</div>`; return; }
-    $("#tx-title").textContent=d.title||"대화 미리보기"; $("#tx-meta").textContent=`총 ${d.total}개 · 최근 ${d.messages.length}개`;
-    $("#tx-body").innerHTML=d.messages.length?d.messages.map(x=>`<div class="msg ${x.role}"><div class="who">${x.role==="user"?"🧑 나":"🤖 Claude"}${x.ts?" · "+new Date(x.ts).toLocaleString():""}</div><div class="bubble">${esc(x.text)}</div></div>`).join(""):`<div class="empty">표시할 대화가 없습니다</div>`;
+    $("#tx-title").textContent=d.title||"Conversation preview"; $("#tx-meta").textContent=`${d.total} total · ${d.messages.length} recent`;
+    $("#tx-body").innerHTML=d.messages.length?d.messages.map(x=>`<div class="msg ${x.role}"><div class="who">${x.role==="user"?"🧑 You":"🤖 Claude"}${x.ts?" · "+new Date(x.ts).toLocaleString():""}</div><div class="bubble">${esc(x.text)}</div></div>`).join(""):`<div class="empty">No messages to show</div>`;
     $("#tx-body").scrollTop=$("#tx-body").scrollHeight;
   }catch(e){ $("#tx-body").innerHTML=`<div class="empty">${esc(e.message)}</div>`; }
 }
@@ -332,60 +332,60 @@ function txResume(fork){ if(!TX) return; closeTx(); resume(TX.mid,TX.cwd,TX.sess
 
 // picker = ADD FOLDER to a node (pin); session is created later from the folder
 async function openPicker(mid,start){
-  const m=mById(mid); if(!m.agentReady) return toast("에이전트가 없는 노드입니다");
-  PK_MID=mid; $("#pk-title").textContent=`폴더 추가 · ${m.name}`; $("#pk-path").value="";
+  const m=mById(mid); if(!m.agentReady) return toast("This node has no agent");
+  PK_MID=mid; $("#pk-title").textContent=`Add folder · ${m.name}`; $("#pk-path").value="";
   $("#picker").classList.add("show"); await pkNav(start||null);
 }
 function closePicker(){ $("#picker").classList.remove("show"); }
 async function pkNav(path){
-  $("#pk-list").innerHTML=`<div class="empty">불러오는 중…</div>`;
+  $("#pk-list").innerHTML=`<div class="empty">Loading…</div>`;
   let d; try{ d=await apiM(PK_MID,`browse${path?`?path=${encodeURIComponent(path)}`:""}`); }
   catch(e){ $("#pk-list").innerHTML=`<div class="empty">${esc(e.message)}</div>`; return; }
   PK_PATH=d.path; $("#pk-cur").textContent=d.path;
-  $("#pk-crumbs").innerHTML=`<button class="ghost" onclick='pkNav(${d.parent?JSON.stringify(d.parent):"null"})' ${d.parent?"":"disabled"}>⬆ 상위</button>
-    <button class="ghost" onclick='pkNav(${JSON.stringify(d.home)})'>🏠 홈</button><code>${esc(d.path)}</code>`;
+  $("#pk-crumbs").innerHTML=`<button class="ghost" onclick='pkNav(${d.parent?JSON.stringify(d.parent):"null"})' ${d.parent?"":"disabled"}>⬆ Up</button>
+    <button class="ghost" onclick='pkNav(${JSON.stringify(d.home)})'>🏠 Home</button><code>${esc(d.path)}</code>`;
   const items=d.entries||[];
-  $("#pk-list").innerHTML=items.length?items.map(e=>`<div class="direntry" onclick='pkNav(${JSON.stringify(e.path)})'><span>📁</span><span style="flex:1">${esc(e.name)}</span>${e.has_sessions?`<span class="dotg" title="세션 있음"></span>`:""}</div>`).join(""):`<div class="empty">하위 폴더 없음 — 아래 '이 폴더 추가'</div>`;
+  $("#pk-list").innerHTML=items.length?items.map(e=>`<div class="direntry" onclick='pkNav(${JSON.stringify(e.path)})'><span>📁</span><span style="flex:1">${esc(e.name)}</span>${e.has_sessions?`<span class="dotg" title="Has sessions"></span>`:""}</div>`).join(""):`<div class="empty">No subfolders — use 'Add this folder' below</div>`;
 }
-function addAndOpen(mid,cwd){ addPin(mid,cwd); closePicker(); loadNodeFolders(mById(mid)); openFolder(mid,cwd); toast("폴더 추가됨"); }
+function addAndOpen(mid,cwd){ addPin(mid,cwd); closePicker(); loadNodeFolders(mById(mid)); openFolder(mid,cwd); toast("Folder added"); }
 function pickHere(){ if(PK_PATH) addAndOpen(PK_MID,PK_PATH); }
 function pickTyped(){ const p=$("#pk-path").value.trim(); if(p) addAndOpen(PK_MID,p); }
-function unpinFolder(mid,cwd){ removePin(mid,cwd); loadNodeFolders(mById(mid)); if(FOLDER_MACHINE===mid&&FOLDER===cwd){ FOLDER=null; $("#main").innerHTML=`<div class="empty">목록에서 제거됨.</div>`; } }
+function unpinFolder(mid,cwd){ removePin(mid,cwd); loadNodeFolders(mById(mid)); if(FOLDER_MACHINE===mid&&FOLDER===cwd){ FOLDER=null; $("#main").innerHTML=`<div class="empty">Removed from list.</div>`; } }
 
 async function launchIn(mid,cwd){
-  const name=await uiPrompt("새 세션 이름 (선택 — 비우면 자동 생성)","");
-  if(name===null) return; // 취소
+  const name=await uiPrompt("New session name (optional — leave blank to auto-generate)","");
+  if(name===null) return; // cancelled
   const body={cwd}; if(name.trim()) body.name=name.trim();
   doLaunch(mid,body);
 }
 function resume(mid,cwd,sessionId,fork){ doLaunch(mid,{cwd,resumeId:sessionId,fork}); }
 async function doLaunch(mid,body){
-  toast("세션 여는 중… (trust 자동승인 + bridge 대기)");
+  toast("Opening session… (auto-approving trust + waiting for bridge)");
   try{
     const {token,error}=await apiM(mid,"launch",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
-    if(error) return toast("실패: "+error);
+    if(error) return toast("Failed: "+error);
     for(let i=0;i<30;i++){ await sleep(1500); const st=await apiM(mid,`launch?token=${token}`);
-      if(st.state==="ready"){ toast("열렸습니다 → 새 탭"); window.open(st.url,"_blank"); if(FOLDER_MACHINE===mid&&FOLDER) openFolder(mid,FOLDER); loadNodeFolders(mById(mid)); return; }
-      if(st.state==="failed") return toast("실패: "+(st.error||"unknown")); }
-    toast("시간 초과 — auth/trust 확인 필요");
-  }catch(e){ toast("오류: "+e.message); }
+      if(st.state==="ready"){ toast("Opened → new tab"); window.open(st.url,"_blank"); if(FOLDER_MACHINE===mid&&FOLDER) openFolder(mid,FOLDER); loadNodeFolders(mById(mid)); return; }
+      if(st.state==="failed") return toast("Failed: "+(st.error||"unknown")); }
+    toast("Timed out — check auth/trust");
+  }catch(e){ toast("Error: "+e.message); }
 }
 async function stopSession(mid,cwd,sessionId){
-  if(!await uiConfirm("실행 중인 이 세션을 종료할까요?")) return;
+  if(!await uiConfirm("Stop this running session?")) return;
   try{ const r=await apiM(mid,"stop",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sessionId})});
-    if(r.ok){ toast("종료됨"); setTimeout(()=>openFolder(mid,cwd),1200); } else toast("종료 실패: "+(r.reason||"")); }catch(e){ toast("오류: "+e.message); }
+    if(r.ok){ toast("Stopped"); setTimeout(()=>openFolder(mid,cwd),1200); } else toast("Stop failed: "+(r.reason||"")); }catch(e){ toast("Error: "+e.message); }
 }
 async function delFolder(mid,cwd,count){
-  if(!await uiConfirm(`이 폴더의 세션 ${count}개를 모두 삭제할까요?\n${cwd}\n실행 중(live)은 건너뜁니다. 되돌릴 수 없습니다.`)) return;
+  if(!await uiConfirm(`Delete all ${count} sessions in this folder?\n${cwd}\nRunning (live) sessions are skipped. This cannot be undone.`)) return;
   try{ const r=await apiM(mid,"folder/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({cwd})});
-    toast(`삭제 ${r.deleted} · 건너뜀(live) ${r.skipped_live}`); loadNodeFolders(mById(mid));
-    if(FOLDER_MACHINE===mid&&FOLDER===cwd) openFolder(mid,cwd); }catch(e){ toast("오류: "+e.message); }
+    toast(`Deleted ${r.deleted} · skipped (live) ${r.skipped_live}`); loadNodeFolders(mById(mid));
+    if(FOLDER_MACHINE===mid&&FOLDER===cwd) openFolder(mid,cwd); }catch(e){ toast("Error: "+e.message); }
 }
 async function del(mid,cwd,sessionId,isLive){
-  if(isLive) return toast("실행 중인 세션은 먼저 '종료' 후 삭제하세요");
-  if(!await uiConfirm("이 세션을 삭제할까요? 되돌릴 수 없습니다.")) return;
+  if(isLive) return toast("Stop the running session before deleting it");
+  if(!await uiConfirm("Delete this session? This cannot be undone.")) return;
   try{ const r=await apiM(mid,`session?sessionId=${sessionId}`,{method:"DELETE"});
-    if(r.ok){ toast("삭제됨"); openFolder(mid,cwd); loadNodeFolders(mById(mid)); } else toast("삭제 거부: "+(r.reason||"")); }catch(e){ toast("오류: "+e.message); }
+    if(r.ok){ toast("Deleted"); openFolder(mid,cwd); loadNodeFolders(mById(mid)); } else toast("Delete rejected: "+(r.reason||"")); }catch(e){ toast("Error: "+e.message); }
 }
 
 // ---- add / rename / remove machine ----
@@ -395,30 +395,30 @@ function openAddMachine(){
   $("#addm").classList.add("show"); setTimeout(()=>$("#am-name").focus(),40);
 }
 function closeAddM(){ $("#addm").classList.remove("show"); }
-function copyCmd(el){ try{ navigator.clipboard.writeText(el.textContent); toast("복사됨"); }catch(e){ toast("선택해서 복사하세요"); } }
+function copyCmd(el){ try{ navigator.clipboard.writeText(el.textContent); toast("Copied"); }catch(e){ toast("Select and copy manually"); } }
 async function submitAddM(){
   const name=$("#am-name").value.trim(), host=$("#am-host").value.trim(), user=$("#am-user").value.trim(), port=$("#am-port").value.trim()||"22";
-  if(!host||!user) return toast("호스트/IP 와 SSH 유저는 필수입니다");
-  closeAddM(); toast("등록 + 배포 시작… (수십 초)");
+  if(!host||!user) return toast("Host/IP and SSH user are required");
+  closeAddM(); toast("Registering + deploying… (tens of seconds)");
   try{
     const r=await (await fetch("/api/machines/add",{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({name:name||host,host,sshUser:user,sshPort:+port})})).json();
-    if(r.error) return toast("실패: "+r.error);
+    if(r.error) return toast("Failed: "+r.error);
     for(let i=0;i<40;i++){ await sleep(3000); await loadRegistry();
-      const m=mById(r.id); if(m&&m.agentReady){ try{ await apiM(r.id,"folders"); toast("배포 완료: "+(m.name||r.id)); return; }catch(e){} } }
-    toast("배포 진행 중 — 잠시 후 새로고침하세요");
-  }catch(e){ toast("오류: "+e.message); }
+      const m=mById(r.id); if(m&&m.agentReady){ try{ await apiM(r.id,"folders"); toast("Deployed: "+(m.name||r.id)); return; }catch(e){} } }
+    toast("Deployment in progress — refresh in a moment");
+  }catch(e){ toast("Error: "+e.message); }
 }
 async function renameMachine(id,cur){
-  const name=await uiPrompt("새 이름(닉네임)",cur,"이름 변경");
+  const name=await uiPrompt("New name (nickname)",cur,"Rename");
   if(name===null||!name.trim()) return;
   try{ const r=await (await fetch("/api/machines/rename",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id,name:name.trim()})})).json();
-    if(r.ok){ toast("이름 변경됨"); loadRegistry(); } else toast("실패: "+(r.error||"")); }catch(e){ toast("오류: "+e.message); }
+    if(r.ok){ toast("Renamed"); loadRegistry(); } else toast("Failed: "+(r.error||"")); }catch(e){ toast("Error: "+e.message); }
 }
 async function removeMachine(id,name){
-  if(!await uiConfirm(`'${name}' 을(를) 목록에서 제거할까요?\n원격 에이전트·세션은 그대로 남고 등록만 해제됩니다.`)) return;
+  if(!await uiConfirm(`Remove '${name}' from the list?\nThe remote agent and sessions stay intact; only the registration is removed.`)) return;
   try{ const r=await (await fetch("/api/machines/remove",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id})})).json();
-    if(r.ok){ toast("제거됨"); if(FOLDER_MACHINE===id){ FOLDER=null; $("#main").innerHTML='<div class="empty">머신이 제거되었습니다.</div>'; } loadRegistry(); } else toast("실패"); }catch(e){ toast("오류: "+e.message); }
+    if(r.ok){ toast("Removed"); if(FOLDER_MACHINE===id){ FOLDER=null; $("#main").innerHTML='<div class="empty">Machine removed.</div>'; } loadRegistry(); } else toast("Failed"); }catch(e){ toast("Error: "+e.message); }
 }
 
 loadRegistry();
