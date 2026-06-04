@@ -195,10 +195,12 @@ def _make_handler(cfg: dict):
             cfg = load_config()
             import os as _os
             from urllib.parse import parse_qs
-            fresh = parse_qs(urlparse(self.path).query).get("fresh", ["0"])[0] in ("1", "true")
+            qs = parse_qs(urlparse(self.path).query)
+            fresh = qs.get("fresh", ["0"])[0] in ("1", "true")
+            delete = qs.get("delete", ["0"])[0] in ("1", "true")
             mdir = _os.path.expanduser("~/.csm-manager")
             target = f"http://127.0.0.1:{cfg['agent']['port']}/manager"
-            body = json.dumps({"cwd": mdir, "fresh": fresh}).encode()
+            body = json.dumps({"cwd": mdir, "fresh": fresh, "delete": delete}).encode()
             req = urllib.request.Request(target, data=body, method="POST")
             req.add_header("Authorization", f"Bearer {cfg['secret']}")
             req.add_header("Content-Type", "application/json")

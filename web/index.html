@@ -26,6 +26,11 @@
   .iconbtn.del:hover { color:#f85149; }
   #mobile-back, #mobile-menu { display:none; }
   .sec-title { font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin:4px 0 8px; }
+  .mgrbar { display:flex; gap:6px; align-items:center; margin:2px 0 12px; padding-bottom:12px; border-bottom:1px solid var(--border); }
+  .mgrbar .mgr-open { flex:1; text-align:left; }
+  .mgrbar .iconbtn { font-size:14px; padding:6px 8px; border:1px solid var(--border); }
+  .mgrbar .iconbtn:hover { border-color:var(--accent); color:var(--fg); }
+  .mgrbar .iconbtn.del:hover { border-color:#f85149; color:#f85149; }
   .nodegrp { margin-bottom:14px; }
   .nodehead { display:flex; align-items:center; gap:8px; padding:7px 6px 7px 9px; border-radius:7px; font-weight:600; }
   .nodehead .nm { flex:1; }
@@ -101,13 +106,16 @@
   <button class="ghost" id="mobile-back" onclick="showNav()">← Nodes</button>
   <h1>🟧 Agent Session Manager</h1>
   <span class="sp"></span>
-  <button class="primary" onclick="openManager()" title="Open the manager session (oversees all machines)">🎯 Manager</button>
-  <button class="ghost" onclick="openManager(true)" title="End the manager session and start a fresh one (reset)">♻️ Reset</button>
   <button class="ghost" onclick="openAddMachine()">＋ Machine</button>
   <button class="ghost" onclick="loadRegistry()">↻</button>
 </header>
 <div class="layout">
   <div class="sidebar">
+    <div class="mgrbar">
+      <button class="primary mgr-open" onclick="openManager()" title="Open the manager session (oversees all machines)">🎯 Open manager session</button>
+      <button class="iconbtn" onclick="openManager(true)" title="Reset — end the session and start fresh">♻️</button>
+      <button class="iconbtn del" onclick="deleteManager()" title="Delete — remove the manager session history">🗑</button>
+    </div>
     <div class="sec-title">Nodes / Folders</div>
     <div id="nodes"></div>
   </div>
@@ -210,6 +218,15 @@ async function openManager(reset){
     const r = await (await fetch("/api/manager"+(reset?"?fresh=1":""))).json();
     if(r.bridgeUrl){ window.open(r.bridgeUrl,"_blank"); toast(reset?"Manager session reset":(r.reused?"Manager session (existing) opened":"Manager session started")); }
     else toast("Failed: "+(r.error||"unknown"));
+  }catch(e){ toast("Error: "+e.message); }
+}
+async function deleteManager(){
+  if(!confirm("Delete the manager session? (clears its history)")) return;
+  toast("Deleting manager session…");
+  try{
+    const r = await (await fetch("/api/manager?delete=1")).json();
+    toast(r.ok ? "Manager session deleted" : "Failed: "+(r.error||"unknown"));
+    loadRegistry();
   }catch(e){ toast("Error: "+e.message); }
 }
 const sleep = ms=>new Promise(r=>setTimeout(r,ms));

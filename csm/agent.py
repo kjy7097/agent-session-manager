@@ -200,6 +200,16 @@ class Agent:
                             "bridgeUrl": common.bridge_url(s["bridge_session_id"])}
         return {"ok": False, "error": "timed out opening manager"}
 
+    def manager_delete(self, cwd: str) -> dict:
+        """Delete the manager session: stop any live session in `cwd` and remove
+        its stored sessions (blank slate; the next open starts brand new)."""
+        cwd = os.path.realpath(os.path.expanduser(cwd))
+        for s in common.live_sessions():
+            if s.get("cwd") and os.path.realpath(s["cwd"]) == cwd:
+                common.stop_session(s["session_id"])
+        time.sleep(0.5)  # let the PTY release before removing files
+        return {"ok": True, "deleted": common.delete_folder_sessions(cwd)}
+
     def delete(self, session_id: str) -> dict:
         return common.delete_session(session_id)
 
@@ -282,8 +292,10 @@ def _make_handler(agent: Agent):
                 return self._send(agent.launch(body))
             if u.path == "/manager":
                 b = body or {}
-                return self._send(agent.manager_open(b.get("cwd") or "~/.csm-manager",
-                                                      fresh=bool(b.get("fresh"))))
+                cwd = b.get("cwd") or "~/.csm-manager"
+                if b.get("delete"):
+                    return self._send(agent.manager_delete(cwd))
+                return self._send(agent.manager_open(cwd, fresh=bool(b.get("fresh"))))
             if u.path == "/stop":
                 if not body or not body.get("sessionId"):
                     return self._send({"error": "sessionId required"}, 400)
