@@ -95,10 +95,7 @@ bind the control plane to your VPN/LAN IP in `csm.config.json` (`control.host`).
 
 ## Changelog
 
-- **Fix — live-session count:** Claude re-execs into a versioned binary, so one
-  session can leave several alive `~/.claude/sessions/<pid>.json` files. The live
-  count now dedupes by `sessionId`, so a folder shows one "live" per session
-  (previously a single re-exec'd session was miscounted as 2+).
+See [CHANGELOG.md](CHANGELOG.md). Current version: **0.2.0**.
 
 ## License
 
