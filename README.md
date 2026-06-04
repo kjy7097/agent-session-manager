@@ -93,6 +93,13 @@ bind the control plane to your VPN/LAN IP in `csm.config.json` (`control.host`).
   shell access.
 - `csm.config.json` holds secrets and is git-ignored. Never commit it.
 
+## Changelog
+
+- **Fix — live-session count:** Claude re-execs into a versioned binary, so one
+  session can leave several alive `~/.claude/sessions/<pid>.json` files. The live
+  count now dedupes by `sessionId`, so a folder shows one "live" per session
+  (previously a single re-exec'd session was miscounted as 2+).
+
 ## License
 
 MIT — see [LICENSE](LICENSE).

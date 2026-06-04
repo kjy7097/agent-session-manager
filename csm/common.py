@@ -421,11 +421,14 @@ def bridge_url(bridge_session_id: str) -> str:
 def live_sessions() -> list[dict]:
     """Currently-running sessions, derived from ~/.claude/sessions/<pid>.json.
 
-    Only includes pidfiles whose pid is actually alive (stale files linger)."""
-    out = []
+    Only includes pidfiles whose pid is alive (stale files linger). Deduped by
+    sessionId: claude re-execs into a versioned binary, so one session can leave
+    several alive pidfiles — count it once (prefer the one with a bridge / newest)."""
+    by_sid: dict[str, dict] = {}
+    extra = []
     sdir = sessions_dir()
     if not sdir.is_dir():
-        return out
+        return extra
     for f in sdir.glob("*.json"):
         try:
             obj = json.loads(f.read_text(encoding="utf-8"))
@@ -434,18 +437,25 @@ def live_sessions() -> list[dict]:
         pid = obj.get("pid")
         if not pid or not _pid_alive(pid):
             continue
-        out.append(
-            {
-                "pid": pid,
-                "session_id": obj.get("sessionId"),
-                "cwd": obj.get("cwd"),
-                "status": obj.get("status"),
-                "bridge_session_id": obj.get("bridgeSessionId"),
-                "started_at": obj.get("startedAt", 0),
-                "updated_at": obj.get("updatedAt", 0),
-            }
-        )
-    return out
+        entry = {
+            "pid": pid,
+            "session_id": obj.get("sessionId"),
+            "cwd": obj.get("cwd"),
+            "status": obj.get("status"),
+            "bridge_session_id": obj.get("bridgeSessionId"),
+            "started_at": obj.get("startedAt", 0),
+            "updated_at": obj.get("updatedAt", 0),
+        }
+        sid = entry["session_id"]
+        if not sid:
+            extra.append(entry)
+            continue
+        prev = by_sid.get(sid)
+        if (prev is None
+                or (entry["bridge_session_id"] and not prev["bridge_session_id"])
+                or (entry.get("updated_at", 0) > prev.get("updated_at", 0))):
+            by_sid[sid] = entry
+    return list(by_sid.values()) + extra
 
 
 def is_session_live(session_id: str) -> bool:
