@@ -102,6 +102,7 @@
   <h1>🟧 Agent Session Manager</h1>
   <span class="sp"></span>
   <button class="primary" onclick="openManager()" title="Open the manager session (oversees all machines)">🎯 Manager</button>
+  <button class="ghost" onclick="openManager(true)" title="End the manager session and start a fresh one (reset)">♻️ Reset</button>
   <button class="ghost" onclick="openAddMachine()">＋ Machine</button>
   <button class="ghost" onclick="loadRegistry()">↻</button>
 </header>
@@ -202,11 +203,12 @@ function showNav(){ document.body.classList.remove("content"); document.body.cla
 function showContent(){ if(isMobile()){ document.body.classList.remove("nav"); document.body.classList.add("content"); } }
 function toast(m,ms=2800){ const t=$("#toast"); t.textContent=m; t.classList.add("show"); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove("show"),ms); }
 // ---- manager session ----
-async function openManager(){
-  toast("Opening manager session…");
+async function openManager(reset){
+  if(reset && !confirm("End the current manager session and start a fresh one?")) return;
+  toast(reset ? "Resetting manager session…" : "Opening manager session…");
   try{
-    const r = await (await fetch("/api/manager")).json();
-    if(r.bridgeUrl){ window.open(r.bridgeUrl,"_blank"); toast(r.reused?"Manager session (existing) opened":"Manager session started"); }
+    const r = await (await fetch("/api/manager"+(reset?"?fresh=1":""))).json();
+    if(r.bridgeUrl){ window.open(r.bridgeUrl,"_blank"); toast(reset?"Manager session reset":(r.reused?"Manager session (existing) opened":"Manager session started")); }
     else toast("Failed: "+(r.error||"unknown"));
   }catch(e){ toast("Error: "+e.message); }
 }

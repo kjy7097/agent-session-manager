@@ -190,12 +190,16 @@ def _make_handler(cfg: dict):
             return self._json({"ok": True})
 
         def _manager(self):
-            # open/continue the persistent orchestration manager on the control host
+            # open/continue (or, with ?fresh=1, reset) the persistent orchestration
+            # manager on the control host
             cfg = load_config()
             import os as _os
+            from urllib.parse import parse_qs
+            fresh = parse_qs(urlparse(self.path).query).get("fresh", ["0"])[0] in ("1", "true")
             mdir = _os.path.expanduser("~/.csm-manager")
             target = f"http://127.0.0.1:{cfg['agent']['port']}/manager"
-            req = urllib.request.Request(target, data=json.dumps({"cwd": mdir}).encode(), method="POST")
+            body = json.dumps({"cwd": mdir, "fresh": fresh}).encode()
+            req = urllib.request.Request(target, data=body, method="POST")
             req.add_header("Authorization", f"Bearer {cfg['secret']}")
             req.add_header("Content-Type", "application/json")
             try:

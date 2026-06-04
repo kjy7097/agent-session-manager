@@ -157,17 +157,26 @@ class Agent:
             rec.update(state="failed", error=err)
         return rec
 
-    def manager_open(self, cwd: str) -> dict:
+    def manager_open(self, cwd: str, fresh: bool = False) -> dict:
         """Open (or continue) the single persistent orchestration-manager session
         in `cwd`, returning its claude.ai/code URL. Reuses a live one, else
-        resumes the most recent session there, else starts fresh. No prompt."""
+        resumes the most recent session there, else starts fresh. No prompt.
+
+        If `fresh`, RESET the manager: stop any live session in `cwd` and start a
+        brand-new one with blank context (no resume)."""
         cwd = os.path.realpath(os.path.expanduser(cwd))
         os.makedirs(cwd, exist_ok=True)
-        for s in common.live_sessions():
-            if s.get("cwd") and os.path.realpath(s["cwd"]) == cwd and s.get("bridge_session_id"):
-                return {"ok": True, "sessionId": s["session_id"], "reused": True,
-                        "bridgeUrl": common.bridge_url(s["bridge_session_id"])}
-        past = common.list_sessions_for_cwd(cwd)
+        if fresh:
+            for s in common.live_sessions():
+                if s.get("cwd") and os.path.realpath(s["cwd"]) == cwd:
+                    common.stop_session(s["session_id"])
+            time.sleep(1.0)  # let the old PTY release before launching fresh
+        else:
+            for s in common.live_sessions():
+                if s.get("cwd") and os.path.realpath(s["cwd"]) == cwd and s.get("bridge_session_id"):
+                    return {"ok": True, "sessionId": s["session_id"], "reused": True,
+                            "bridgeUrl": common.bridge_url(s["bridge_session_id"])}
+        past = [] if fresh else common.list_sessions_for_cwd(cwd)
         resume_id = past[0]["session_id"] if past else ""
         started = time.time()
         logf = open(self.log_dir / "manager.log", "wb")
@@ -272,7 +281,9 @@ def _make_handler(agent: Agent):
                     return self._send({"error": "cwd required"}, 400)
                 return self._send(agent.launch(body))
             if u.path == "/manager":
-                return self._send(agent.manager_open((body or {}).get("cwd") or "~/.csm-manager"))
+                b = body or {}
+                return self._send(agent.manager_open(b.get("cwd") or "~/.csm-manager",
+                                                      fresh=bool(b.get("fresh"))))
             if u.path == "/stop":
                 if not body or not body.get("sessionId"):
                     return self._send({"error": "sessionId required"}, 400)
