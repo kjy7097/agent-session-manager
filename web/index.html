@@ -76,6 +76,8 @@
   .direntry { padding:10px 12px; border-radius:6px; cursor:pointer; display:flex; gap:8px; align-items:center; }
   .direntry:hover { background:var(--bg); }
   .direntry .dotg { width:7px; height:7px; border-radius:50%; background:var(--accent); }
+  .fileentry { padding:5px 12px; display:flex; gap:8px; align-items:center; color:var(--muted); font-size:12px; }
+  .fileentry .fsize { font-size:11px; color:var(--muted); opacity:.8; }
   .pk-direct { padding:10px 18px; border-top:1px solid var(--border); display:flex; gap:6px; }
   .pk-direct input { flex:1; background:var(--bg); border:1px solid var(--border); color:var(--fg); padding:8px 10px; border-radius:6px; font-size:13px; }
   .modal-foot { padding:12px 18px; border-top:1px solid var(--border); display:flex; gap:8px; align-items:center; }
@@ -231,6 +233,7 @@ async function deleteManager(){
 }
 const sleep = ms=>new Promise(r=>setTimeout(r,ms));
 const esc = s=>(s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const fmtSize = b=>(b==null?"":b<1024?b+" B":b<1048576?(b/1024).toFixed(1)+" KB":b<1073741824?(b/1048576).toFixed(1)+" MB":(b/1073741824).toFixed(1)+" GB");
 const shortPath = p=>{ const a=(p||"").split(/[\\/]/).filter(Boolean); return a.length>2?"…/"+a.slice(-2).join("/"):p; };
 
 // pinned folders per machine (localStorage)
@@ -373,8 +376,12 @@ async function pkNav(path){
   PK_PATH=d.path; $("#pk-cur").textContent=d.path;
   $("#pk-crumbs").innerHTML=`<button class="ghost" onclick='pkNav(${d.parent?JSON.stringify(d.parent):"null"})' ${d.parent?"":"disabled"}>⬆ Up</button>
     <button class="ghost" onclick='pkNav(${JSON.stringify(d.home)})'>🏠 Home</button><code>${esc(d.path)}</code>`;
-  const items=d.entries||[];
-  $("#pk-list").innerHTML=items.length?items.map(e=>`<div class="direntry" onclick='pkNav(${JSON.stringify(e.path)})'><span>📁</span><span style="flex:1">${esc(e.name)}</span>${e.has_sessions?`<span class="dotg" title="Has sessions"></span>`:""}</div>`).join(""):`<div class="empty">No subfolders — use 'Add this folder' below</div>`;
+  const items=d.entries||[], files=d.files||[];
+  const dirsHtml=items.length?items.map(e=>`<div class="direntry" onclick='pkNav(${JSON.stringify(e.path)})'><span>📁</span><span style="flex:1">${esc(e.name)}</span>${e.has_sessions?`<span class="dotg" title="Has sessions"></span>`:""}</div>`).join(""):`<div class="empty sm">No subfolders</div>`;
+  const filesHtml=files.length
+    ? `<div class="sec-title" style="margin:12px 4px 4px">Files in this folder (${d.file_count}${d.file_count>files.length?`, showing ${files.length}`:""})</div>`+files.map(f=>`<div class="fileentry"><span>📄</span><span style="flex:1">${esc(f.name)}</span><span class="fsize">${fmtSize(f.size)}</span></div>`).join("")
+    : `<div class="empty sm" style="margin-top:10px">No files in this folder</div>`;
+  $("#pk-list").innerHTML=dirsHtml+filesHtml;
 }
 function addAndOpen(mid,cwd){ addPin(mid,cwd); closePicker(); loadNodeFolders(mById(mid)); openFolder(mid,cwd); toast("Folder added"); }
 function pickHere(){ if(PK_PATH) addAndOpen(PK_MID,PK_PATH); }

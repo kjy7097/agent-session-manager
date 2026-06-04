@@ -329,6 +329,7 @@ def browse_dir(path: str | None = None) -> dict:
         base = home
     session_cwds = {f["cwd"] for f in list_folders()}
     entries = []
+    files = []
     err = None
     try:
         with os.scandir(base) as it:
@@ -336,15 +337,22 @@ def browse_dir(path: str | None = None) -> dict:
                 if e.name.startswith("."):
                     continue
                 try:
-                    if not e.is_dir(follow_symlinks=False):
-                        continue
+                    is_dir = e.is_dir(follow_symlinks=False)
                 except OSError:
                     continue
-                full = os.path.join(base, e.name)
-                entries.append({"name": e.name, "path": full, "has_sessions": full in session_cwds})
+                if is_dir:
+                    full = os.path.join(base, e.name)
+                    entries.append({"name": e.name, "path": full, "has_sessions": full in session_cwds})
+                else:
+                    try:
+                        size = e.stat(follow_symlinks=False).st_size
+                    except OSError:
+                        size = None
+                    files.append({"name": e.name, "size": size})
     except OSError as ex:
         err = str(ex)
     entries.sort(key=lambda d: d["name"].lower())
+    files.sort(key=lambda f: f["name"].lower())
     parent = os.path.dirname(base) if base != "/" else None
     return {
         "path": base,
@@ -352,6 +360,8 @@ def browse_dir(path: str | None = None) -> dict:
         "home": home,
         "has_sessions": base in session_cwds,
         "entries": entries,
+        "files": files[:300],       # current folder's files, so the user can confirm
+        "file_count": len(files),
         "error": err,
     }
 
