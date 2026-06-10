@@ -1,3 +1,3 @@
 """Claude Session Manager — web control center for Claude Code sessions across machines."""
 
-__version__ = "0.3.1"
+__version__ = "0.4.0"

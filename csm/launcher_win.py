@@ -25,6 +25,7 @@ def main() -> int:
     resume_id = sys.argv[3]
     fork = sys.argv[4] == "1"
     claude_path = sys.argv[5]
+    prompt = sys.argv[6] if len(sys.argv) > 6 else ""
 
     if not os.path.isdir(folder):
         sys.stderr.write(f"launcher_win: folder not found: {folder}\n")
@@ -43,6 +44,8 @@ def main() -> int:
     trust_sent = [0]
     last = [0.0]
     buf = [""]
+    ready_at = [None]
+    prompt_sent = [not prompt]
 
     def drain():
         while True:
@@ -64,9 +67,24 @@ def main() -> int:
                     pass
                 trust_sent[0] += 1
                 last[0] = time.time()
+            if ready_at[0] is None and ("remotecontrol" in norm or "claude.ai/code" in norm):
+                ready_at[0] = time.time()
 
     t = threading.Thread(target=drain, daemon=True)
     t.start()
+
+    # inject the prompt once the session is ready (interactive, no claude -p)
+    while not prompt_sent[0]:
+        if ready_at[0] and time.time() - ready_at[0] > 4:
+            try:
+                proc.write(prompt + "\r")
+            except Exception:
+                pass
+            prompt_sent[0] = True
+        elif not proc.isalive():
+            break
+        else:
+            time.sleep(0.5)
 
     # keep the ConPTY open for the lifetime of the session
     while proc.isalive():

@@ -106,6 +106,8 @@
     button, .direntry, .folder { min-height:38px; }
     .actions button { flex:1 1 auto; }
   }
+  .who .rw{ background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:0 4px;margin-left:6px;opacity:.45;line-height:1; }
+  .who .rw:hover{ opacity:1;color:var(--fg); }
 </style>
 </head>
 <body class="nav content">
@@ -161,6 +163,7 @@
     <h3 id="tx-title" data-i18n="대화 미리보기">대화 미리보기</h3>
     <div class="msgs" id="tx-body"></div>
     <div class="modal-foot" id="tx-foot-claude"><div class="cur" id="tx-meta"></div>
+      <button class="ghost" onclick="handoff('codex')" data-i18n="🟢 Codex로 전환" title="이 대화를 Codex 새 세션으로 이어갑니다">🟢 Codex로 전환</button>
       <button onclick="closeTx()" data-i18n="닫기">닫기</button>
       <button onclick="txResume(false)" data-i18n="이어가기">이어가기</button>
       <button class="ghost" onclick="txResume(true)">Fork</button></div>
@@ -172,6 +175,7 @@
              onkeydown="if(event.key==='Enter')txSend()"
              onpaste="for(const it of (event.clipboardData||{}).items||[]){if(it.type.startsWith('image/')){attachImage(it.getAsFile());event.preventDefault();}}">
       <button class="primary" onclick="txSend()" data-i18n="보내기">보내기</button>
+      <button class="ghost" onclick="handoff('claude')" data-i18n="🟧 Claude로 전환" title="이 대화를 Claude 새 세션으로 이어갑니다">🟧 Claude로 전환</button>
       <button onclick="closeTx()" data-i18n="닫기">닫기</button></div>
   </div>
 </div>
@@ -260,6 +264,13 @@ const EN={
 "이미지 업로드 중…":"Uploading image…","업로드 실패: ":"Upload failed: ","이미지 첨부됨":"Image attached",
 "(이미지)":"(image)","첨부한 이미지를 봐줘":"Please look at the attached image",
 "🧑 나":"🧑 You",
+"🟢 Codex로 전환":"🟢 Switch to Codex","🟧 Claude로 전환":"🟧 Switch to Claude",
+"여기서 되감아 새 세션으로 이어가기":"Rewind to here — branch a new session from this point",
+"이 시점으로 되감아 새 세션을 만듭니다. 진행할까요?":"Rewind to this point and start a NEW session from here. Proceed?",
+"이 대화를 다른 모델의 새 세션으로 이어갑니다. 진행할까요?":"Continue this conversation in a NEW session of the other agent. Proceed?",
+"되감는 중… (선택 시점까지 맥락 이전 + 새 세션)":"Rewinding… (carrying context up to here into a new session)",
+"모델 전환 중… (맥락 이전 + 새 세션)":"Switching model… (carrying context into a new session)",
+"완료 — 새 Codex 세션":"Done — new Codex session","완료 — 새 Claude 세션 (새 탭)":"Done — new Claude session (new tab)",
 "🟢 새 Codex 세션 — 첫 메시지:":"🟢 New Codex session — first message:",
 "Codex 세션 생성 중… (응답까지 잠시)":"Starting Codex session… (takes a moment)","Codex 세션 생성됨":"Codex session started",
 "이 폴더의 파일":"Files in this folder","개 중 ":" total, showing ","개 표시":"","총 ":"",
@@ -451,7 +462,7 @@ async function loadSessionList(mid,cwd,query){
 function txRender(d,agent){
   const bot=agent==="codex"?"🟢 Codex":"🤖 Claude";
   $("#tx-title").textContent=d.title||t("대화 미리보기"); $("#tx-meta").textContent=LANG==="en"?`${d.total} total · ${d.messages.length} recent`:`총 ${d.total}개 · 최근 ${d.messages.length}개`;
-  $("#tx-body").innerHTML=d.messages.length?d.messages.map(x=>`<div class="msg ${x.role}"><div class="who">${x.role==="user"?t("🧑 나"):bot}${x.ts?" · "+new Date(x.ts).toLocaleString():""}</div><div class="bubble">${esc(x.text)}</div></div>`).join(""):`<div class="empty">표시할 대화가 없습니다</div>`;
+  $("#tx-body").innerHTML=d.messages.length?d.messages.map((x,i)=>`<div class="msg ${x.role}"><div class="who">${x.role==="user"?t("🧑 나"):bot}${x.ts?" · "+new Date(x.ts).toLocaleString():""}<button class="rw" onclick="rewindTo(${i})" title="${t("여기서 되감아 새 세션으로 이어가기")}">↶</button></div><div class="bubble">${esc(x.text)}</div></div>`).join(""):`<div class="empty">${t("표시할 대화가 없습니다")}</div>`;
   $("#tx-body").scrollTop=$("#tx-body").scrollHeight;
 }
 async function preview(mid,cwd,sessionId,agent){
@@ -481,6 +492,29 @@ async function attachImage(file){
     if(!r.ok){ toast(t("업로드 실패: ")+(r.error||"")); return; }
     (TX.attachments=TX.attachments||[]).push({name:file.name||"pasted.png",path:r.path});
     renderAttach(); toast(t("이미지 첨부됨"));
+  }catch(e){ toast(t("오류: ")+e.message); }
+}
+function rewindTo(i){ return handoff(TX&&TX.agent, i); }
+async function handoff(toAgent, upToIndex){
+  if(!TX) return;
+  const rewind = (toAgent===TX.agent);
+  const ask = rewind ? t("이 시점으로 되감아 새 세션을 만듭니다. 진행할까요?")
+                     : t("이 대화를 다른 모델의 새 세션으로 이어갑니다. 진행할까요?");
+  if(!confirm(ask)) return;
+  toast(rewind ? t("되감는 중… (선택 시점까지 맥락 이전 + 새 세션)") : t("모델 전환 중… (맥락 이전 + 새 세션)"));
+  const payload={sessionId:TX.sessionId,fromAgent:TX.agent,toAgent:toAgent,cwd:TX.cwd};
+  if(Number.isInteger(upToIndex)) payload.upToIndex=upToIndex;
+  try{
+    const r=await apiM(TX.mid,"handoff",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+    if(!r.ok&&!r.token){ toast(t("실패: ")+(r.error||"unknown")); return; }
+    if(toAgent==="codex"){
+      toast(t("완료 — 새 Codex 세션"));
+      openFolder(TX.mid,TX.cwd); preview(TX.mid,TX.cwd,r.sessionId,"codex"); return;
+    }
+    for(let i=0;i<40;i++){ await sleep(1500); const st=await apiM(TX.mid,`launch?token=${r.token}`);
+      if(st.state==="ready"){ toast(t("완료 — 새 Claude 세션 (새 탭)")); window.open(st.url,"_blank"); closeTx(); openFolder(TX.mid,TX.cwd); return; }
+      if(st.state==="failed"){ toast(t("실패: ")+(st.error||"unknown")); return; } }
+    toast(t("시간 초과 — auth/trust 확인 필요"));
   }catch(e){ toast(t("오류: ")+e.message); }
 }
 async function txSend(){

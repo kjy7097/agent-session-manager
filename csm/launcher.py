@@ -7,7 +7,10 @@ drains output until Claude exits. The agent does NOT read anything back from
 here — it discovers the resulting session by polling ~/.claude/sessions/*.json.
 
 Usage:
-    python launcher.py <folder> <name> <resume_id|''> <0|1 fork> <claude_path>
+    python launcher.py <folder> <name> <resume_id|''> <0|1 fork> <claude_path> [prompt]
+
+If [prompt] is given, it is typed into the session (PTY stdin) once the session
+is ready — interactive, no `claude -p`. The session stays alive afterward.
 """
 
 from __future__ import annotations
@@ -21,6 +24,7 @@ import time
 
 ANSI = re.compile(rb"\x1b\[[0-9;?]*[A-Za-z]")
 TRUST_NEEDLE = b"trustthisfolder"  # normalized (no spaces/newlines, lowercase)
+READY_NEEDLES = (b"remotecontrol", b"claude.ai/code")
 
 
 def main() -> int:
@@ -29,6 +33,7 @@ def main() -> int:
     resume_id = sys.argv[3]
     fork = sys.argv[4] == "1"
     claude_path = sys.argv[5]
+    prompt = sys.argv[6] if len(sys.argv) > 6 else ""
 
     folder = os.path.realpath(os.path.expanduser(folder))
     if not os.path.isdir(folder):
@@ -49,11 +54,13 @@ def main() -> int:
         os.execv(claude_path, argv)
         os._exit(127)  # unreachable on success
 
-    # parent: drain pty, auto-confirm trust, stay alive for the session
+    # parent: drain pty, auto-confirm trust, optionally inject a prompt, stay alive
     buf = b""
     trust_sent = 0
     last_trust = 0.0
     start = time.monotonic()
+    ready_at = None
+    prompt_sent = not prompt  # nothing to send if no prompt
     while True:
         try:
             r, _, _ = select.select([fd], [], [], 1.0)
@@ -79,7 +86,16 @@ def main() -> int:
                     pass
                 trust_sent += 1
                 last_trust = time.monotonic()
+            if ready_at is None and any(n in norm for n in READY_NEEDLES):
+                ready_at = time.monotonic()
             buf = buf[-8192:]  # bound memory over a long session
+        # inject the prompt a few seconds after the session is ready
+        if not prompt_sent and ready_at and time.monotonic() - ready_at > 4:
+            try:
+                os.write(fd, prompt.encode() + b"\r")
+            except OSError:
+                pass
+            prompt_sent = True
         # safety: if claude never produced output and is gone, exit
         if time.monotonic() - start > 5 and not _alive(pid):
             break

@@ -109,6 +109,70 @@ class Agent:
         p.write_bytes(data)
         return {"ok": True, "path": str(p)}
 
+    def handoff(self, body: dict) -> dict:
+        """Branch a session into a NEW session, optionally under the other agent.
+
+        Both Claude and Codex store plain-text jsonl, so we serialize the source
+        transcript (optionally truncated at `upToIndex` for a rewind) and seed a
+        fresh target session with it.
+
+        body: {sessionId, fromAgent, toAgent?, cwd, upToIndex?}
+          - toAgent == fromAgent + upToIndex  -> rewind (same model, earlier point)
+          - toAgent != fromAgent              -> model switch (handoff)
+        Returns the codex {ok, sessionId, response} or the claude {token} to poll.
+        """
+        sid = body.get("sessionId") or ""
+        src = body.get("fromAgent") or "claude"
+        dst = body.get("toAgent") or src
+        cwd = body.get("cwd") or ""
+        up = body.get("upToIndex")
+        if not sid:
+            return {"ok": False, "error": "sessionId required"}
+        tx = self.transcript(sid, src)
+        if tx.get("error"):
+            return {"ok": False, "error": f"source transcript: {tx['error']}"}
+        msgs = tx.get("messages") or []
+        if isinstance(up, int) and 0 <= up < len(msgs):
+            msgs = msgs[:up + 1]          # keep through the chosen message
+        if not msgs:
+            return {"ok": False, "error": "nothing to carry over"}
+        # keep the most recent turns within a budget so the seed stays sane
+        budget, kept, used = 8000, [], 0
+        for m in reversed(msgs):
+            t = m.get("text") or ""
+            if used + len(t) > budget and kept:
+                break
+            kept.append(m)
+            used += len(t)
+        kept.reverse()
+        omitted = len(msgs) - len(kept)
+        rewind = (dst == src)
+        head = ("[Rewind] Resuming this conversation from an earlier point. "
+                "The history below is the context up to that point — continue from here."
+                if rewind else
+                f"[Handoff] The conversation below was carried over from another coding "
+                f"agent ({src}). Continue it as if it were your own context.")
+        lines = [head]
+        if omitted > 0:
+            lines.append(f"(... {omitted} earlier messages omitted ...)")
+        for m in kept:
+            who = "User" if m["role"] == "user" else "Assistant"
+            lines.append(f"{who}: {m['text']}")
+        lines += ["---", "Acknowledge briefly that you have the context, then continue."]
+        seed = "\n".join(lines)
+        if dst == "codex":
+            r = codex.run({"cwd": cwd, "prompt": seed,
+                           "timeoutSec": int(body.get("timeoutSec") or 240)})
+            r["toAgent"] = "codex"
+            return r
+        tag = "rewind" if rewind else "handoff"
+        r = self.launch({"cwd": cwd, "prompt": seed, "name": f"{tag}-{sid[:8]}"})
+        if isinstance(r, tuple):
+            return {"ok": False, "error": r[0].get("error", "launch failed")}
+        r["ok"] = True
+        r["toAgent"] = "claude"
+        return r   # {token} — poll /launch?token= as with a normal launch
+
     def transcript(self, session_id: str, agent_kind: str = "") -> dict:
         if agent_kind == "codex":
             return codex.transcript(session_id)
@@ -142,6 +206,8 @@ class Agent:
         token = secrets.token_hex(8)
         logf = open(self.log_dir / f"{token}.log", "wb")
         argv = [LAUNCH_EXE, str(LAUNCHER), cwd, name, resume_id, fork, self.claude_path]
+        if (body.get("prompt") or "").strip():   # optional seed (rewind / model handoff)
+            argv.append(body["prompt"])
         kw = dict(stdin=subprocess.DEVNULL, stdout=logf, stderr=subprocess.STDOUT, close_fds=True)
         if IS_WIN:
             # detach so the session outlives the agent/SSH session
@@ -341,6 +407,8 @@ def _make_handler(agent: Agent):
                 return self._send({"error": "only agent='codex' runs are supported"}, 400)
             if u.path == "/upload":
                 return self._send(agent.upload(body or {}))
+            if u.path == "/handoff":
+                return self._send(agent.handoff(body or {}))
             if u.path == "/manager":
                 b = body or {}
                 cwd = b.get("cwd") or "~/.csm-manager"

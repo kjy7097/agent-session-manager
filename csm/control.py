@@ -323,7 +323,8 @@ def _make_handler(cfg: dict):
             if body is not None:
                 req.add_header("Content-Type", "application/json")
             try:
-                with urllib.request.urlopen(req, timeout=60) as resp:
+                tmo = 300 if rest.split("?", 1)[0] in ("run", "handoff") else 60
+                with urllib.request.urlopen(req, timeout=tmo) as resp:
                     data = resp.read()
                     status = resp.status
             except urllib.error.HTTPError as e:
