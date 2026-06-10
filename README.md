@@ -95,7 +95,7 @@ bind the control plane to your VPN/LAN IP in `csm.config.json` (`control.host`).
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md). Current version: **0.2.0**.
+See [CHANGELOG.md](CHANGELOG.md). Current version: **0.3.0**.
 
 ## License
 

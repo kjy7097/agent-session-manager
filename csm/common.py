@@ -319,11 +319,24 @@ def list_sessions_for_cwd(cwd: str) -> list[dict]:
     return rows
 
 
+DRIVES = "::drives::"  # virtual picker root listing Windows drive letters
+
+
 def browse_dir(path: str | None = None) -> dict:
     """List subdirectories of `path` (default: home) so the UI can navigate the
     machine's filesystem and pick a folder. Hidden dirs are omitted. Entries are
-    flagged with has_sessions when that folder already holds Claude sessions."""
+    flagged with has_sessions when that folder already holds Claude sessions.
+
+    On Windows, going UP from a drive root (C:\\) lands on a virtual drive list
+    (D:\\, E:\\, ...) so other drives are reachable from the picker."""
     home = str(Path.home())
+    if path == DRIVES and os.name == "nt":
+        import string
+        entries = [{"name": f"{d}:\\", "path": f"{d}:\\", "has_sessions": False}
+                   for d in string.ascii_uppercase if os.path.exists(f"{d}:\\")]
+        return {"path": "My PC (drives)", "parent": None, "home": home,
+                "has_sessions": False, "entries": entries, "files": [], "file_count": 0,
+                "drives": [], "error": None}
     base = _realpath(path) if path else home
     if not os.path.isdir(base):
         base = home
@@ -353,7 +366,14 @@ def browse_dir(path: str | None = None) -> dict:
         err = str(ex)
     entries.sort(key=lambda d: d["name"].lower())
     files.sort(key=lambda f: f["name"].lower())
-    parent = os.path.dirname(base) if base != "/" else None
+    drives = []
+    if os.name == "nt":
+        import string
+        drives = [f"{d}:\\" for d in string.ascii_uppercase if os.path.exists(f"{d}:\\")]
+        # at a drive root (C:\) the parent is the virtual drive list
+        parent = DRIVES if os.path.splitdrive(base)[1] in ("\\", "/", "") else os.path.dirname(base)
+    else:
+        parent = os.path.dirname(base) if base != "/" else None
     return {
         "path": base,
         "parent": parent,
@@ -362,6 +382,7 @@ def browse_dir(path: str | None = None) -> dict:
         "entries": entries,
         "files": files[:300],       # current folder's files, so the user can confirm
         "file_count": len(files),
+        "drives": drives,           # Windows drive letters for the picker's side list
         "error": err,
     }
 

@@ -44,6 +44,26 @@ Write-Host "DONE  tailnetIP=$ip  hostname=$env:COMPUTERNAME"
 Write-Host '이제 맥 웹UI에서 이 노드 옆 [배포] 버튼을 누르세요.'
 """
 
+# Bash run on a new LINUX machine (sudo prompts) to authorize this host + prep.
+_ENROLL_SH = r"""# CSM enroll — run on the NEW Linux machine (sudo will prompt)
+key='__PUBKEY__'
+echo '== OpenSSH server =='
+if command -v apt-get >/dev/null 2>&1; then sudo apt-get update -qq && sudo apt-get install -y openssh-server >/dev/null
+elif command -v dnf >/dev/null 2>&1; then sudo dnf install -y openssh-server >/dev/null
+elif command -v pacman >/dev/null 2>&1; then sudo pacman -S --noconfirm openssh >/dev/null; fi
+sudo systemctl enable --now ssh 2>/dev/null || sudo systemctl enable --now sshd 2>/dev/null || true
+echo '== authorize control host key =='
+mkdir -p "$HOME/.ssh" && chmod 700 "$HOME/.ssh"
+grep -qF "$key" "$HOME/.ssh/authorized_keys" 2>/dev/null || echo "$key" >> "$HOME/.ssh/authorized_keys"
+chmod 600 "$HOME/.ssh/authorized_keys"
+echo '== python check =='
+command -v python3 >/dev/null 2>&1 && echo "python3 OK: $(command -v python3)" || echo 'WARNING: python3 missing — apt/dnf install python3'
+ip=$(ip -4 addr 2>/dev/null | grep -oE '100\.[0-9.]+' | head -1)
+echo ''
+echo "DONE  tailnetIP=${ip:-?}  hostname=$(hostname)  user=$USER"
+echo 'Now register this machine in the web UI (Add machine) — deploy auto-detects Linux.'
+"""
+
 
 def build_registry(cfg: dict) -> list[dict]:
     """Registry from config: the local machine (control host) + each entry in
@@ -152,7 +172,8 @@ def _make_handler(cfg: dict):
             self._save_cfg(cfg)
             log = Path.home() / ".csm-run" / f"deploy-{mid}.log"
             script = Path(__file__).resolve().parent.parent / "scripts" / "deploy_agent.py"
-            subprocess.Popen([sys.executable, str(script), mid, host, user],
+            subprocess.Popen([sys.executable, str(script), mid, host, user, "",
+                              str(int(b.get("sshPort") or 22))],
                              stdout=open(log, "wb"), stderr=subprocess.STDOUT,
                              start_new_session=True, close_fds=True)
             refresh()
@@ -220,7 +241,10 @@ def _make_handler(cfg: dict):
                 pub = (Path.home() / ".ssh/id_ed25519.pub").read_text(encoding="utf-8").strip()
             except OSError:
                 return self._json({"error": "no mac pubkey"}, 500)
-            script = _ENROLL_PS1.replace("__PUBKEY__", pub)
+            from urllib.parse import parse_qs
+            target_os = parse_qs(urlparse(self.path).query).get("os", ["windows"])[0]
+            tmpl = _ENROLL_SH if target_os == "linux" else _ENROLL_PS1
+            script = tmpl.replace("__PUBKEY__", pub)
             data = script.encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/plain; charset=utf-8")

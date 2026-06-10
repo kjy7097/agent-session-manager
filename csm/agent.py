@@ -25,7 +25,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
-from . import __version__, common, skills
+from . import __version__, codex, common, skills
 from .config import load_config
 
 HERE = Path(__file__).resolve().parent
@@ -64,16 +64,60 @@ class Agent:
         }
 
     def folders(self) -> dict:
-        return {"folders": common.list_folders()}
+        # merge Claude folders with Codex folders (same cwd -> one row)
+        rows = common.list_folders()
+        by_cwd = {f["cwd"]: f for f in rows}
+        for cf in codex.list_folders():
+            f = by_cwd.get(cf["cwd"])
+            if f:
+                f["session_count"] = f.get("session_count", 0) + cf["session_count"]
+                f["codex_count"] = cf["session_count"]
+                f["last_activity"] = max(f.get("last_activity") or 0, cf["last_activity"])
+            else:
+                cf["codex_count"] = cf["session_count"]
+                rows.append(cf)
+                by_cwd[cf["cwd"]] = cf
+        return {"folders": rows}
 
     def sessions(self, cwd: str) -> dict:
-        return {"sessions": common.list_sessions_for_cwd(cwd)}
+        rows = common.list_sessions_for_cwd(cwd)
+        for r in rows:
+            r.setdefault("agent", "claude")
+        rows += codex.list_sessions_for_cwd(cwd)
+        rows.sort(key=lambda r: r.get("last_activity") or 0, reverse=True)
+        return {"sessions": rows}
 
     def browse(self, path: str | None) -> dict:
         return common.browse_dir(path)
 
-    def transcript(self, session_id: str) -> dict:
-        return common.session_preview(session_id)
+    def upload(self, body: dict) -> dict:
+        """Save a base64 image to ~/.csm-uploads and return its path — used to
+        attach images to codex runs (codex exec -i <path>)."""
+        import base64
+        name = os.path.basename(body.get("filename") or "image.png") or "image.png"
+        try:
+            data = base64.b64decode(body.get("data") or "")
+        except Exception:
+            data = b""
+        if not data:
+            return {"error": "no data"}, 400
+        if len(data) > 20 * 1024 * 1024:
+            return {"error": "image too large (>20MB)"}, 400
+        d = Path.home() / ".csm-uploads"
+        d.mkdir(exist_ok=True)
+        p = d / f"{int(time.time() * 1000)}-{name}"
+        p.write_bytes(data)
+        return {"ok": True, "path": str(p)}
+
+    def transcript(self, session_id: str, agent_kind: str = "") -> dict:
+        if agent_kind == "codex":
+            return codex.transcript(session_id)
+        d = common.session_preview(session_id)
+        if d.get("error") and not agent_kind:   # fall through for unlabeled codex ids
+            c = codex.transcript(session_id)
+            if not c.get("error"):
+                return c
+        return d
 
     def search(self, cwd: str, q: str) -> dict:
         return {"sessions": common.search_sessions(cwd, q)}
@@ -269,7 +313,7 @@ def _make_handler(agent: Agent):
                 sid = (q.get("sessionId") or [""])[0]
                 if not sid:
                     return self._send({"error": "sessionId required"}, 400)
-                return self._send(agent.transcript(sid))
+                return self._send(agent.transcript(sid, (q.get("agent") or [""])[0]))
             if u.path == "/search":
                 cwd = (q.get("cwd") or [""])[0]
                 if not cwd:
@@ -290,6 +334,13 @@ def _make_handler(agent: Agent):
                 if not body or not body.get("cwd"):
                     return self._send({"error": "cwd required"}, 400)
                 return self._send(agent.launch(body))
+            if u.path == "/run":
+                b = body or {}
+                if b.get("agent") == "codex":
+                    return self._send(codex.run(b))
+                return self._send({"error": "only agent='codex' runs are supported"}, 400)
+            if u.path == "/upload":
+                return self._send(agent.upload(body or {}))
             if u.path == "/manager":
                 b = body or {}
                 cwd = b.get("cwd") or "~/.csm-manager"

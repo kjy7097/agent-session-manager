@@ -133,9 +133,12 @@
   <div class="modal">
     <h3>Add machine</h3>
     <div style="padding:14px 18px;font-size:13px;line-height:1.6">
-      <div style="color:var(--muted);margin-bottom:10px">Run once in an <b>elevated PowerShell</b> on the new computer (sets up SSH key · OpenSSH · Python):</div>
+      <div style="color:var(--muted);margin-bottom:6px">Run once on the new computer (sets up SSH key · OpenSSH · Python):</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:3px">🪟 Windows — <b>elevated PowerShell</b>:</div>
       <div class="cmd" id="enroll-cmd" onclick="copyCmd(this)" title="Click to copy"></div>
-      <div style="margin:8px 0 4px;color:var(--muted)">Then register with the details below → auto-deploy:</div>
+      <div style="font-size:12px;color:var(--muted);margin:8px 0 3px">🐧 Linux — terminal (sudo will prompt):</div>
+      <div class="cmd" id="enroll-cmd-linux" onclick="copyCmd(this)" title="Click to copy"></div>
+      <div style="margin:10px 0 4px;color:var(--muted)">Then register with the details below → auto-deploy (OS auto-detected):</div>
       <div style="display:grid;grid-template-columns:90px 1fr;gap:8px;align-items:center">
         <label>Nickname</label><input id="am-name" class="searchbox" placeholder="e.g. Work desktop">
         <label>Host/IP</label><input id="am-host" class="searchbox" placeholder="e.g. 192.168.1.50 or a tailscale IP">
@@ -153,10 +156,29 @@
   <div class="modal wide">
     <h3 id="tx-title">Conversation preview</h3>
     <div class="msgs" id="tx-body"></div>
-    <div class="modal-foot"><div class="cur" id="tx-meta"></div>
+    <div id="tx-attach" style="display:none;padding:4px 18px;font-size:12px;color:var(--muted)"></div>
+    <div class="modal-foot" id="tx-foot-claude"><div class="cur" id="tx-meta"></div>
       <button onclick="closeTx()">Close</button>
       <button onclick="txResume(false)">Resume</button>
       <button class="ghost" onclick="txResume(true)">Fork</button></div>
+    <div class="modal-foot" id="tx-foot-codex" style="display:none">
+      <input type="file" id="tx-file" accept="image/*" multiple style="display:none" onchange="for(const f of this.files)attachImage(f);this.value=''">
+      <button class="ghost" onclick="$('#tx-file').click()" title="Attach image (or paste into the input)">📎</button>
+      <input id="tx-input" class="searchbox" style="flex:1" placeholder="🟢 Message Codex… (paste images, Enter to send)"
+             onkeydown="if(event.key==='Enter')txSend()"
+             onpaste="for(const it of (event.clipboardData||{}).items||[]){if(it.type.startsWith('image/')){attachImage(it.getAsFile());event.preventDefault();}}">
+      <button class="primary" onclick="txSend()">Send</button>
+      <button onclick="closeTx()">Close</button></div>
+  </div>
+</div>
+
+<div class="modal-bg" id="agpick" onclick="if(event.target.id==='agpick')$('#agpick').classList.remove('show')">
+  <div class="modal" style="width:min(360px,94vw)">
+    <h3>New session — choose agent</h3>
+    <div style="padding:18px;display:flex;gap:10px">
+      <button class="primary" style="flex:1;padding:14px" onclick="agGo('claude')">🟧 Claude</button>
+      <button class="primary" style="flex:1;padding:14px;background:#10a37f;border-color:#10a37f" onclick="agGo('codex')">🟢 Codex</button>
+    </div>
   </div>
 </div>
 
@@ -164,7 +186,10 @@
   <div class="modal">
     <h3 id="pk-title">Add folder</h3>
     <div class="crumbs" id="pk-crumbs"></div>
-    <div class="dirlist" id="pk-list"></div>
+    <div style="display:flex;min-height:160px;flex:1;overflow:hidden">
+      <div id="pk-drives" style="display:none;flex:0 0 86px;border-right:1px solid var(--border);overflow:auto;padding:6px 4px"></div>
+      <div class="dirlist" id="pk-list" style="flex:1"></div>
+    </div>
     <div class="pk-direct">
       <input id="pk-path" placeholder="…or type a path and press Enter" spellcheck="false" onkeydown="if(event.key==='Enter')pickTyped()">
       <button onclick="pickTyped()">Add</button>
@@ -321,7 +346,7 @@ function renderFolderView(mid,cwd){
   const m=mById(mid), mj=JSON.stringify(mid), cj=JSON.stringify(cwd);
   $("#main").innerHTML=`<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
       <div style="flex:1;min-width:160px"><div class="sec-title">${osIcon(m.os)} ${esc(m.name)}</div><div style="word-break:break-all">${esc(cwd)}</div></div>
-      <button class="primary" onclick='launchIn(${mj},${cj})'>＋ New session</button>
+      <button class="primary" onclick='newSession(${mj},${cj})'>＋ New session</button>
       <button class="ghost" onclick='openFolder(${mj},${cj})'>↻</button></div>
     <input class="searchbox" id="ssearch" placeholder="🔎 Search sessions in this folder (title · conversation)" spellcheck="false"
        oninput='clearTimeout(searchTimer);searchTimer=setTimeout(()=>loadSessionList(${mj},${cj},this.value),300)'>
@@ -345,12 +370,22 @@ async function loadSessionList(mid,cwd,query){
   sessions.sort((a,b)=>(b._top?1:0)-(a._top?1:0)); // pinned sessions to the top (otherwise keep API order)
   sl.innerHTML=sessions.map(s=>{
     const when=s.last_activity?new Date(s.last_activity*1000).toLocaleString():"";
-    const badges=`<span class="badge node">${osIcon(m.os)} ${esc(m.name)}</span>`+(s.is_remote_control?`<span class="badge rc">remote</span>`:"")+(s.is_live?`<span class="badge live">live</span>`:"");
+    const isCx=s.agent==="codex";
+    const agentBadge=isCx?`<span class="badge" style="color:#10a37f;border-color:#10a37f">🟢 codex</span>`:`<span class="badge" style="color:var(--accent);border-color:var(--accent)">🟧 claude</span>`;
+    const badges=agentBadge+`<span class="badge node">${osIcon(m.os)} ${esc(m.name)}</span>`+(s.is_remote_control?`<span class="badge rc">remote</span>`:"")+(s.is_live?`<span class="badge live">live</span>`:"");
     const sj=JSON.stringify(s.session_id);
     const openBtn=s.is_live&&s.bridge_url?`<button class="primary" onclick='window.open(${JSON.stringify(s.bridge_url)},"_blank")'>Open</button>`:"";
     const stopBtn=s.is_live?`<button class="danger" onclick='stopSession(${mj},${cj},${sj})'>■ Stop</button>`:"";
     const snip=s.snippet?`<div class="snippet">…${esc(s.snippet)}</div>`:"";
     const pinBtn=`<button class="ghost${s._top?" on":""}" onclick='toggleTopSession(${mj},${cj},${sj})' title="${s._top?"Unpin from top":"Pin to top"}">${s._top?"📌 Pinned":"📌 Pin"}</button>`;
+    if(isCx){
+      return `<div class="session"><div class="row1"><span class="title">${s._top?"📌 ":""}${esc(s.title)}</span>${badges}</div>
+        <div class="sub">${esc(s.first_prompt||"")}</div>
+        <div class="sub">${s.msg_count} messages · ${when} · <code>${s.session_id.slice(0,8)}</code></div>${snip}
+        <div class="actions">
+          <button class="primary" onclick='preview(${mj},${cj},${sj},"codex")'>💬 Chat</button>
+          ${pinBtn}</div></div>`;
+    }
     return `<div class="session"><div class="row1"><span class="title">${s._top?"📌 ":""}${esc(s.title)}</span>${badges}</div>
       <div class="sub">${esc(s.first_prompt||"")}</div>
       <div class="sub">${s.msg_count} messages · ${when} · ${esc(s.git_branch||"")} · <code>${s.session_id.slice(0,8)}</code></div>${snip}
@@ -362,17 +397,75 @@ async function loadSessionList(mid,cwd,query){
   }).join("");
 }
 
-async function preview(mid,cwd,sessionId){
-  TX={mid,cwd,sessionId}; $("#tx").classList.add("show"); $("#tx-body").innerHTML=`<div class="empty">Loading…</div>`; $("#tx-meta").textContent="";
-  try{ const d=await apiM(mid,`transcript?sessionId=${sessionId}`);
+function txRender(d,agent){
+  const bot=agent==="codex"?"🟢 Codex":"🤖 Claude";
+  $("#tx-title").textContent=d.title||"Conversation preview"; $("#tx-meta").textContent=`${d.total} total · ${d.messages.length} recent`;
+  $("#tx-body").innerHTML=d.messages.length?d.messages.map(x=>`<div class="msg ${x.role}"><div class="who">${x.role==="user"?"🧑 You":bot}${x.ts?" · "+new Date(x.ts).toLocaleString():""}</div><div class="bubble">${esc(x.text)}</div></div>`).join(""):`<div class="empty">No messages to show</div>`;
+  $("#tx-body").scrollTop=$("#tx-body").scrollHeight;
+}
+async function preview(mid,cwd,sessionId,agent){
+  TX={mid,cwd,sessionId,agent:agent||"claude"};
+  $("#tx-foot-claude").style.display = TX.agent==="codex"?"none":"flex";
+  $("#tx-foot-codex").style.display = TX.agent==="codex"?"flex":"none";
+  $("#tx").classList.add("show"); $("#tx-body").innerHTML=`<div class="empty">Loading…</div>`; $("#tx-meta").textContent="";
+  try{ const d=await apiM(mid,`transcript?sessionId=${sessionId}${TX.agent==="codex"?"&agent=codex":""}`);
     if(d.error){ $("#tx-body").innerHTML=`<div class="empty">${esc(d.error)}</div>`; return; }
-    $("#tx-title").textContent=d.title||"Conversation preview"; $("#tx-meta").textContent=`${d.total} total · ${d.messages.length} recent`;
-    $("#tx-body").innerHTML=d.messages.length?d.messages.map(x=>`<div class="msg ${x.role}"><div class="who">${x.role==="user"?"🧑 You":"🤖 Claude"}${x.ts?" · "+new Date(x.ts).toLocaleString():""}</div><div class="bubble">${esc(x.text)}</div></div>`).join(""):`<div class="empty">No messages to show</div>`;
-    $("#tx-body").scrollTop=$("#tx-body").scrollHeight;
+    txRender(d,TX.agent);
   }catch(e){ $("#tx-body").innerHTML=`<div class="empty">${esc(e.message)}</div>`; }
 }
 function closeTx(){ $("#tx").classList.remove("show"); }
 function txResume(fork){ if(!TX) return; closeTx(); resume(TX.mid,TX.cwd,TX.sessionId,fork); }
+function renderAttach(){
+  const box=$("#tx-attach"), a=(TX&&TX.attachments)||[];
+  box.style.display=a.length?"block":"none";
+  box.innerHTML=a.map((x,i)=>`🖼 ${esc(x.name)} <a href="#" onclick="TX.attachments.splice(${i},1);renderAttach();return false">✕</a>`).join(" · ");
+}
+async function attachImage(file){
+  if(!file||!TX) return;
+  const b64=await new Promise(res=>{const r=new FileReader();r.onload=()=>res(r.result.split(",",2)[1]);r.readAsDataURL(file);});
+  toast("Uploading image…");
+  try{
+    const r=await apiM(TX.mid,"upload",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({filename:file.name||"pasted.png",data:b64})});
+    if(!r.ok){ toast("Upload failed: "+(r.error||"")); return; }
+    (TX.attachments=TX.attachments||[]).push({name:file.name||"pasted.png",path:r.path});
+    renderAttach(); toast("Image attached");
+  }catch(e){ toast("Error: "+e.message); }
+}
+async function txSend(){
+  const inp=$("#tx-input"); const msg=(inp.value||"").trim();
+  const imgs=((TX&&TX.attachments)||[]).map(a=>a.path);
+  if((!msg&&!imgs.length)||!TX) return;
+  inp.value=""; inp.disabled=true; inp.placeholder="🟢 Waiting for Codex… (may take minutes)";
+  $("#tx-body").insertAdjacentHTML("beforeend",`<div class="msg user"><div class="who">🧑 You</div><div class="bubble">${esc(msg||"(image)")}${imgs.length?` 🖼×${imgs.length}`:""}</div></div>`);
+  $("#tx-body").scrollTop=$("#tx-body").scrollHeight;
+  try{
+    const r=await apiM(TX.mid,"run",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({agent:"codex",cwd:TX.cwd,resumeId:TX.sessionId,prompt:msg||"Please look at the attached image",images:imgs})});
+    if(!r.ok){ toast("Failed: "+(r.error||"unknown")); }
+    TX.attachments=[]; renderAttach();
+    const d=await apiM(TX.mid,`transcript?sessionId=${TX.sessionId}&agent=codex`);
+    if(!d.error) txRender(d,"codex");
+  }catch(e){ toast("Error: "+e.message); }
+  inp.disabled=false; inp.placeholder="🟢 Message Codex… (paste images, Enter to send)"; inp.focus();
+}
+let AG=null;
+function newSession(mid,cwd){ AG={mid,cwd}; $("#agpick").classList.add("show"); }
+function agGo(kind){
+  $("#agpick").classList.remove("show"); if(!AG) return;
+  if(kind==="claude") launchIn(AG.mid,AG.cwd); else newCodexSession(AG.mid,AG.cwd);
+}
+async function newCodexSession(mid,cwd){
+  const first=prompt("🟢 New Codex session — first message:"); if(!first) return;
+  toast("Starting Codex session… (takes a moment)");
+  try{
+    const r=await apiM(mid,"run",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({agent:"codex",cwd,prompt:first})});
+    if(!r.ok){ toast("Failed: "+(r.error||"unknown")); return; }
+    toast("Codex session started"); openFolder(mid,cwd);
+    preview(mid,cwd,r.sessionId,"codex");
+  }catch(e){ toast("Error: "+e.message); }
+}
 
 // picker = ADD FOLDER to a node (pin); session is created later from the folder
 async function openPicker(mid,start){
@@ -386,8 +479,33 @@ async function pkNav(path){
   let d; try{ d=await apiM(PK_MID,`browse${path?`?path=${encodeURIComponent(path)}`:""}`); }
   catch(e){ $("#pk-list").innerHTML=`<div class="empty">${esc(e.message)}</div>`; return; }
   PK_PATH=d.path; $("#pk-cur").textContent=d.path;
+  // breadcrumb: each path segment is clickable
+  const win=d.path.includes("\\");
+  let crumbHtml="";
+  if(d.path && !d.path.startsWith("My PC")){
+    const sep=win?"\\":"/";
+    const parts=d.path.split(/[\\/]/).filter(Boolean);
+    let acc=win?"":"/";
+    const segs=[];
+    if(!win) segs.push({label:"/",path:"/"});
+    for(const p of parts){
+      acc = win ? (acc?acc+sep+p:p+sep) : (acc==="/"?"/"+p:acc+sep+p);
+      const full = win&&/^[A-Za-z]:$/.test(acc)?acc+"\\":acc;
+      segs.push({label:p,path:full});
+    }
+    crumbHtml=segs.map(s2=>`<a href="#" style="color:var(--accent2)" onclick='pkNav(${JSON.stringify(s2.path)});return false'>${esc(s2.label)}</a>`).join(`<span style="opacity:.5">${esc(sep)}</span>`);
+  } else { crumbHtml=`<code>${esc(d.path)}</code>`; }
   $("#pk-crumbs").innerHTML=`<button class="ghost" onclick='pkNav(${d.parent?JSON.stringify(d.parent):"null"})' ${d.parent?"":"disabled"}>⬆ Up</button>
-    <button class="ghost" onclick='pkNav(${JSON.stringify(d.home)})'>🏠 Home</button><code>${esc(d.path)}</code>`;
+    <button class="ghost" onclick='pkNav(${JSON.stringify(d.home)})'>🏠 Home</button>${crumbHtml}`;
+  // drive side list (Windows targets)
+  const dv=$("#pk-drives"), drv=d.drives||[];
+  if(drv.length){
+    dv.style.display="block";
+    dv.innerHTML=`<div class="sec-title" style="margin:2px 2px 6px">Drives</div>`+drv.map(x=>{
+      const on=d.path.toUpperCase().startsWith(x.toUpperCase().slice(0,2));
+      return `<div class="direntry" style="padding:7px 8px${on?";border-left:2px solid var(--accent)":""}" onclick='pkNav(${JSON.stringify(x)})'>💽 ${esc(x.replace("\\\\",""))}</div>`;
+    }).join("");
+  } else dv.style.display="none";
   const items=d.entries||[], files=d.files||[];
   const dirsHtml=items.length?items.map(e=>`<div class="direntry" onclick='pkNav(${JSON.stringify(e.path)})'><span>📁</span><span style="flex:1">${esc(e.name)}</span>${e.has_sessions?`<span class="dotg" title="Has sessions"></span>`:""}</div>`).join(""):`<div class="empty sm">No subfolders</div>`;
   const filesHtml=files.length
@@ -439,6 +557,7 @@ async function del(mid,cwd,sessionId,isLive){
 // ---- add / rename / remove machine ----
 function openAddMachine(){
   $("#enroll-cmd").textContent = `irm http://${location.host}/enroll | iex`;
+  if($("#enroll-cmd-linux")) $("#enroll-cmd-linux").textContent = `curl -fsSL http://${location.host}/enroll?os=linux | bash`;
   $("#am-name").value=""; $("#am-host").value=""; $("#am-user").value=""; $("#am-port").value="22";
   $("#addm").classList.add("show"); setTimeout(()=>$("#am-name").focus(),40);
 }
