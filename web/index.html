@@ -256,7 +256,7 @@ const EN={
 "매니저 세션 삭제 중…":"Deleting manager session…","매니저 세션 삭제됨":"Manager session deleted",
 "이미지 업로드 중…":"Uploading image…","업로드 실패: ":"Upload failed: ","이미지 첨부됨":"Image attached",
 "(이미지)":"(image)","첨부한 이미지를 봐줘":"Please look at the attached image",
-t("🧑 나"):"🧑 You",
+"🧑 나":"🧑 You",
 "🟢 새 Codex 세션 — 첫 메시지:":"🟢 New Codex session — first message:",
 "Codex 세션 생성 중… (응답까지 잠시)":"Starting Codex session… (takes a moment)","Codex 세션 생성됨":"Codex session started",
 "이 폴더의 파일":"Files in this folder","개 중 ":" total, showing ","개 표시":"","총 ":"",
@@ -485,7 +485,7 @@ async function txSend(){
   const imgs=((TX&&TX.attachments)||[]).map(a=>a.path);
   if((!msg&&!imgs.length)||!TX) return;
   inp.value=""; inp.disabled=true; inp.placeholder=t("🟢 Codex 응답 대기 중… (최대 몇 분)");
-  $("#tx-body").insertAdjacentHTML("beforeend",`<div class="msg user"><div class="who">🧑 나</div><div class="bubble">${esc(msg||t("(이미지)"))}${imgs.length?` 🖼×${imgs.length}`:""}</div></div>`);
+  $("#tx-body").insertAdjacentHTML("beforeend",`<div class="msg user"><div class="who">${t("🧑 나")}</div><div class="bubble">${esc(msg||t("(이미지)"))}${imgs.length?` 🖼×${imgs.length}`:""}</div></div>`);
   $("#tx-body").scrollTop=$("#tx-body").scrollHeight;
   try{
     const r=await apiM(TX.mid,"run",{method:"POST",headers:{"Content-Type":"application/json"},
