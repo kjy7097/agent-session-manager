@@ -41,7 +41,7 @@ if($py){ Write-Host "python OK: $py" } else { Write-Host 'WARNING: real Python n
 $ip=(Get-NetIPAddress -AddressFamily IPv4 -EA SilentlyContinue | Where-Object { $_.IPAddress -like '100.*' } | Select-Object -First 1).IPAddress
 Write-Host ''
 Write-Host "DONE  tailnetIP=$ip  hostname=$env:COMPUTERNAME"
-Write-Host '이제 맥 웹UI에서 이 노드 옆 [배포] 버튼을 누르세요.'
+Write-Host 'Now register this machine in the web UI (Add machine).'
 """
 
 # Bash run on a new LINUX machine (sudo prompts) to authorize this host + prep.
@@ -119,12 +119,22 @@ def _make_handler(cfg: dict):
                 return self._enroll()
             if u.path == "/api/manager":
                 return self._manager()
+            if u.path == "/api/prefs":
+                return self._json({"ui": load_config().get("ui") or {}})
             if u.path.startswith("/api/m/"):
                 return self._proxy("GET")
             return self._json({"error": "not found"}, 404)
 
         def do_POST(self):
             p = urlparse(self.path).path
+            if p == "/api/prefs":
+                b = self._read_body() or {}
+                cfg = load_config()
+                ui = cfg.setdefault("ui", {})
+                if b.get("lang") in ("ko", "en"):
+                    ui["lang"] = b["lang"]
+                self._save_cfg(cfg)
+                return self._json({"ok": True, "ui": ui})
             if p == "/api/deploy":
                 return self._deploy()
             if p == "/api/machines/add":

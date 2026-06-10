@@ -368,6 +368,8 @@ def _make_handler(agent: Agent):
                 sid = (q.get("sessionId") or [""])[0]
                 if not sid:
                     return self._send({"error": "sessionId required"}, 400)
+                if (q.get("agent") or [""])[0] == "codex":
+                    return self._send(codex.delete(sid))
                 return self._send(agent.delete(sid))
             return self._send({"error": "not found"}, 404)
 

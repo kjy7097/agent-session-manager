@@ -164,6 +164,27 @@ def transcript(session_id: str) -> dict:
     return {"error": "not found"}
 
 
+def delete(session_id: str) -> dict:
+    """Delete a codex session by removing its rollout jsonl."""
+    for f in _all_rollouts():
+        if session_id in f.name:
+            try:
+                f.unlink()
+                return {"ok": True, "agent": "codex"}
+            except OSError as e:
+                return {"ok": False, "reason": str(e)}
+    # slow path: id only inside the file's session_meta
+    for f in _all_rollouts():
+        r = parse_rollout(f)
+        if r and r["session_id"] == session_id:
+            try:
+                f.unlink()
+                return {"ok": True, "agent": "codex"}
+            except OSError as e:
+                return {"ok": False, "reason": str(e)}
+    return {"ok": False, "reason": "not found"}
+
+
 def run(body: dict) -> dict:
     """Start or resume a codex session non-interactively and return the reply.
 
