@@ -1,8 +1,9 @@
 # Agent Session Manager
 
 A self-hosted web control center for **CLI coding-agent sessions across multiple
-machines**. It currently drives **Claude Code** (`claude --remote-control`) and is
-structured so other CLI agents can be added behind the same control plane.
+machines**. It drives **Claude Code** (`claude --remote-control`) and **OpenAI
+Codex CLI** behind one control plane — folders and session lists merge both
+agents, with per-agent actions on each session.
 
 Open a remote session in any folder on any of your computers, browse
 / search / resume / delete past sessions per folder, and keep your custom skills
@@ -15,8 +16,12 @@ in sync — all from one browser tab. No more SSHing into each box and typing
 
 ## Features
 
-- **Multi-machine** — register machines by host + SSH user; reach each agent over
-  an auto-reconnecting SSH tunnel.
+- **Multi-machine** — register machines by host + SSH user (Windows **and Linux**
+  targets); reach each agent over an auto-reconnecting SSH tunnel.
+- **Multi-agent** — Claude Code and OpenAI Codex sessions side by side
+  (🟧 / 🟢 badges). Codex sessions open in a chat panel: read the transcript and
+  continue turn-by-turn (`codex exec resume`), attach or paste **images**
+  (`codex -i`). One "＋ New session" button, then pick the agent.
 - **Open sessions in any folder** with zero manual SSH/cd — pick (or pin) a folder,
   click "new session"; the bridge URL (`claude.ai/code/...`) opens in a new tab.
 - **Browse by folder**, per machine; **search sessions** by title *and conversation
@@ -28,6 +33,7 @@ in sync — all from one browser tab. No more SSHing into each box and typing
   credential/encrypted files. Edit anywhere; it propagates.
 - **Survives reboots** — agents run as OS services (Windows Task Scheduler /
   macOS launchd); the control plane + tunnels run under launchd.
+- **Korean/English UI** — 🌐 toggle; the preference persists server-side.
 - Single static web UI (vanilla JS), mobile-friendly. Pure Python 3 standard
   library on the backend (plus `pywinpty` on Windows agents).
 
@@ -39,9 +45,11 @@ browser ──► control plane (this host) ──► SSH tunnel ──► agent
 ```
 
 - **agent** (`csm/agent.py`) — one per machine. Reads that machine's `~/.claude`
-  (folders, sessions, transcripts, skills) and launches detached
+  **and `~/.codex`** (folders, sessions, transcripts, skills) and launches detached
   `claude --remote-control` sessions in a real PTY (POSIX `pty.fork`, or ConPTY via
   `pywinpty` on Windows). Bound to `127.0.0.1`; bearer-token (HMAC) auth.
+- **codex adapter** (`csm/codex.py`) — parses Codex rollout JSONLs and runs
+  `codex exec --json` (new/resume, optional images) on the agent's machine.
 - **control plane** (`csm/control.py`) — serves the web UI, holds the machine
   registry (from `csm.config.json`), and proxies browser requests to each agent
   over its local SSH-tunnel port (attaching the per-machine secret).
@@ -54,6 +62,8 @@ browser ──► control plane (this host) ──► SSH tunnel ──► agent
 - **Control host**: Python 3.10+, OpenSSH client, an SSH key.
 - **Each machine**: Claude Code CLI installed and logged in (`claude auth`),
   Python 3, OpenSSH server, and the control host's SSH public key authorized.
+  For Codex features: the Codex CLI installed and signed in (ChatGPT login or a
+  local provider) — optional per machine.
 - Windows agents additionally use `pywinpty` (installed automatically by the
   deploy script).
 
@@ -71,18 +81,25 @@ bind the control plane to your VPN/LAN IP in `csm.config.json` (`control.host`).
 
 ### Add a machine
 
-1. Authorize the control host's SSH key on the target (one-time). On Windows,
-   run an **elevated** PowerShell command served at `http://<control>/enroll`:
-   ```powershell
-   irm http://<control-host>:8765/enroll | iex
-   ```
-   (sets up OpenSSH server, authorizes the key, checks Python).
+1. Authorize the control host's SSH key on the target (one-time), with the
+   enroll script served by the control plane:
+   - **Windows** (elevated PowerShell):
+     ```powershell
+     irm http://<control-host>:8765/enroll | iex
+     ```
+   - **Linux** (terminal; sudo will prompt):
+     ```bash
+     curl -fsSL http://<control-host>:8765/enroll?os=linux | bash
+     ```
+   (sets up the OpenSSH server, authorizes the key, checks Python).
 2. From the control host, deploy the agent:
    ```bash
    python scripts/deploy_agent.py <id> <host> <ssh-user>
    ```
-   This pushes the agent, registers an autostart service, opens a tunnel, and adds
-   the machine to `csm.config.json`. Refresh the UI — it appears.
+   The target OS is auto-detected; the agent autostarts via a Windows scheduled
+   task or a Linux systemd user service, a tunnel opens, and the machine lands in
+   `csm.config.json`. Refresh the UI — it appears. (Or use the **Add machine**
+   dialog in the UI, which does the same.)
 
 ## Security
 
@@ -95,7 +112,7 @@ bind the control plane to your VPN/LAN IP in `csm.config.json` (`control.host`).
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md). Current version: **0.3.1**.
+- **Fix — live-session count:** dedupe live sessions by `sessionId` (Claude re-exec leaves multiple alive pidfiles for one session).
 
 ## License
 
