@@ -10,12 +10,12 @@
   * { box-sizing:border-box; }
   body { margin:0; font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:var(--bg); color:var(--fg); }
   header { padding:12px 18px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:12px; }
-  header h1 { font-size:15px; margin:0; font-weight:600; }
+  header h1 { font-size:15px; margin:0; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .sp { margin-left:auto; }
   .layout { display:grid; grid-template-columns:340px 1fr; height:calc(100vh - 53px); }
   .sidebar { border-right:1px solid var(--border); overflow:auto; padding:10px; }
   .main { overflow:auto; padding:18px 22px; }
-  button { background:var(--panel); color:var(--fg); border:1px solid var(--border); padding:7px 12px; border-radius:6px; cursor:pointer; font-size:13px; }
+  button { background:var(--panel); color:var(--fg); border:1px solid var(--border); padding:7px 12px; border-radius:6px; cursor:pointer; font-size:13px; white-space:nowrap; }
   button:hover { border-color:var(--accent); }
   button:disabled { opacity:.45; cursor:not-allowed; }
   button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
@@ -93,6 +93,9 @@
   #toast { position:fixed; bottom:18px; left:50%; transform:translateX(-50%); background:var(--panel); border:1px solid var(--border); padding:10px 16px; border-radius:8px; opacity:0; transition:opacity .2s; pointer-events:none; max-width:80vw; z-index:20; }
   #toast.show { opacity:1; }
   @media (max-width:760px){
+    header { padding:10px 10px; gap:6px; }
+    header h1 { font-size:13px; }
+    header button { padding:6px 8px; font-size:12px; }
     .layout { grid-template-columns:1fr; height:calc(100vh - 53px); }
     .sidebar { display:none; border-right:none; }
     .main { display:none; }
@@ -267,7 +270,7 @@ function applyStatic(){
   document.querySelectorAll("[data-i18n]").forEach(e=>e.textContent=t(e.dataset.i18n));
   document.querySelectorAll("[data-i18n-ph]").forEach(e=>e.placeholder=t(e.dataset.i18nPh));
   document.querySelectorAll("[data-i18n-title]").forEach(e=>e.title=t(e.dataset.i18nTitle));
-  const lb=document.getElementById("langbtn"); if(lb) lb.textContent=LANG==="ko"?"🌐 한국어":"🌐 EN";
+  const lb=document.getElementById("langbtn"); if(lb) lb.textContent=LANG==="ko"?"🌐 KO":"🌐 EN";
 }
 async function initLang(){
   try{const r=await(await fetch("/api/prefs")).json(); if(r.ui&&r.ui.lang){LANG=r.ui.lang;localStorage.setItem("csm.lang",LANG);}}catch(e){}
@@ -299,7 +302,7 @@ document.addEventListener("keydown",e=>{ if(!$("#dlg").classList.contains("show"
   if(e.key==="Enter"){e.preventDefault();dlgOk();} if(e.key==="Escape")dlgCancel(); });
 let MACHINES=[], FOLDER=null, FOLDER_MACHINE=null, PK_MID=null, PK_PATH=null, TX=null;
 const mById = id => MACHINES.find(m=>m.id===id)||{};
-const osIcon = os => os==="windows"?"🪟":os==="macos"?"🍎":os==="linux"?"🐧":"💻";
+const osIcon = os => os==="windows"?"🖥️":os==="macos"?"🍎":os==="linux"?"🐧":"💻";
 const cssid = id => id.replace(/[^a-zA-Z0-9_-]/g,"_");
 const fkey = (mid,cwd)=>mid+""+cwd;
 const isMobile = ()=>window.matchMedia("(max-width:760px)").matches;
