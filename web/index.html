@@ -214,7 +214,7 @@
 
 <script>
 // ---- i18n (ko/en). Korean source strings are the keys; t() falls back to ko. ----
-let LANG=localStorage.getItem("csm.lang")||((navigator.language||"").startsWith("ko")?"ko":"en");
+let LANG=localStorage.getItem("csm.lang")||"en";  // default: English (toggle persists)
 const EN={
 "🎯 매니저 세션 열기":"🎯 Open manager session",
 "전 머신을 총괄하는 매니저 세션 열기":"Open the manager session (oversees all machines)",
