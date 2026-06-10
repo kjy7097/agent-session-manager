@@ -92,6 +92,7 @@ def parse_session(path: Path) -> dict:
     is_remote_control = False
     msg_count = 0
     last_ts = 0.0
+    model = None
 
     try:
         with path.open(encoding="utf-8", errors="replace") as fh:
@@ -126,6 +127,9 @@ def parse_session(path: Path) -> dict:
                             first_prompt = txt[:200]
                 elif t == "assistant":
                     msg_count += 1
+                    _m = (obj.get("message") or {}).get("model")
+                    if _m:
+                        model = _m   # last one wins = current model
                 elif t == "bridge-session":
                     is_remote_control = True
                     bridge_session_id = obj.get("bridgeSessionId") or bridge_session_id
@@ -151,6 +155,7 @@ def parse_session(path: Path) -> dict:
         "git_branch": git_branch or "",
         "is_remote_control": is_remote_control,
         "bridge_session_id": bridge_session_id,
+        "model": model or "",
     }
 
 
@@ -162,6 +167,7 @@ def session_preview(session_id: str, limit: int = 40) -> dict:
         return {"error": "not found"}
     title = None
     msgs = []
+    model = None
     try:
         with f.open(encoding="utf-8", errors="replace") as fh:
             for line in fh:
@@ -182,6 +188,8 @@ def session_preview(session_id: str, limit: int = 40) -> dict:
                     if not txt or txt.startswith("<"):
                         continue
                     msgs.append({"role": t, "text": txt[:4000], "ts": obj.get("timestamp")})
+                    if t == "assistant":
+                        model = (obj.get("message") or {}).get("model") or model
     except OSError as e:
         return {"error": str(e)}
     return {
@@ -189,6 +197,7 @@ def session_preview(session_id: str, limit: int = 40) -> dict:
         "title": title or "(no title)",
         "total": len(msgs),
         "messages": msgs[-limit:],
+        "model": model or "",
     }
 
 

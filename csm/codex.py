@@ -56,6 +56,7 @@ def parse_rollout(path: Path, want_msgs: bool = False) -> dict | None:
     """One rollout jsonl -> session row (mirrors common.parse_session keys)."""
     sid = cwd = None
     first_prompt = None
+    model = None
     msgs: list = []
     last_ts = ""
     try:
@@ -76,6 +77,8 @@ def parse_rollout(path: Path, want_msgs: bool = False) -> dict | None:
                 if t == "session_meta":
                     sid = p.get("id") or sid
                     cwd = p.get("cwd") or cwd
+                elif t == "turn_context" and p.get("model"):
+                    model = p["model"]
                 elif t == "response_item" and p.get("role") in ("user", "assistant"):
                     role = p["role"]
                     txt = _text(p.get("content")).strip()
@@ -104,6 +107,7 @@ def parse_rollout(path: Path, want_msgs: bool = False) -> dict | None:
         "first_prompt": first_prompt or "",
         "last_activity": _epoch(last_ts) or mtime,
         "msg_count": len(msgs),
+        "model": model or "",
         "git_branch": "",
         "is_remote_control": False,
         "bridge_session_id": None,
