@@ -133,6 +133,8 @@ def _make_handler(cfg: dict):
                 ui = cfg.setdefault("ui", {})
                 if b.get("lang") in ("ko", "en"):
                     ui["lang"] = b["lang"]
+                if "defaultModel" in b:
+                    ui["defaultModel"] = str(b["defaultModel"] or "")[:40]
                 self._save_cfg(cfg)
                 return self._json({"ok": True, "ui": ui})
             if p == "/api/deploy":

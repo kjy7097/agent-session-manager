@@ -26,12 +26,15 @@ def main() -> int:
     fork = sys.argv[4] == "1"
     claude_path = sys.argv[5]
     prompt = sys.argv[6] if len(sys.argv) > 6 else ""
+    model = sys.argv[7] if len(sys.argv) > 7 else ""
 
     if not os.path.isdir(folder):
         sys.stderr.write(f"launcher_win: folder not found: {folder}\n")
         return 2
 
     argv = [claude_path, "--remote-control", name]
+    if model:
+        argv += ["--model", model]
     if resume_id:
         argv += ["-r", resume_id]
         if fork:

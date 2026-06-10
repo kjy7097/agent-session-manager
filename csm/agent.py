@@ -215,8 +215,12 @@ class Agent:
         token = secrets.token_hex(8)
         logf = open(self.log_dir / f"{token}.log", "wb")
         argv = [LAUNCH_EXE, str(LAUNCHER), cwd, name, resume_id, fork, self.claude_path]
-        if (body.get("prompt") or "").strip():   # optional seed (rewind / model handoff)
-            argv.append(body["prompt"])
+        prompt = (body.get("prompt") or "").strip()   # optional seed (rewind / handoff)
+        model = (body.get("model") or "").strip()     # optional claude --model override
+        if prompt or model:
+            argv.append(prompt)
+        if model:
+            argv.append(model)
         kw = dict(stdin=subprocess.DEVNULL, stdout=logf, stderr=subprocess.STDOUT, close_fds=True)
         if IS_WIN:
             # detach so the session outlives the agent/SSH session

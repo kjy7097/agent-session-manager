@@ -116,6 +116,7 @@
   <h1>🟧 Agent Session Manager</h1>
   <span class="sp"></span>
   <button class="ghost" onclick="openAddMachine()" data-i18n="＋ 머신">＋ 머신</button>
+  <select id="defmodel" class="ghost" onchange="saveDefModel(this.value)" title="기본 모델 (새 세션·이어가기에 적용)" style="background:var(--panel);color:var(--fg);border:1px solid var(--border);border-radius:6px;padding:6px 6px;font-size:12px;max-width:110px"></select>
   <button class="ghost" id="langbtn" onclick="setLang(LANG==='ko'?'en':'ko')" title="Language">🌐</button>
   <button class="ghost" onclick="loadRegistry()">↻</button>
 </header>
@@ -163,6 +164,7 @@
     <h3 id="tx-title" data-i18n="대화 미리보기">대화 미리보기</h3>
     <div class="msgs" id="tx-body"></div>
     <div class="modal-foot" id="tx-foot-claude"><div class="cur" id="tx-meta"></div>
+      <select id="tx-model" style="background:var(--panel);color:var(--fg);border:1px solid var(--border);border-radius:6px;padding:6px;max-width:110px;font-size:12px"></select>
       <button class="ghost" onclick="handoff('codex')" data-i18n="🟢 Codex로 전환" title="이 대화를 Codex 새 세션으로 이어갑니다">🟢 Codex로 전환</button>
       <button onclick="closeTx()" data-i18n="닫기">닫기</button>
       <button onclick="txResume(false)" data-i18n="이어가기">이어가기</button>
@@ -183,6 +185,10 @@
 <div class="modal-bg" id="agpick" onclick="if(event.target.id==='agpick')$('#agpick').classList.remove('show')">
   <div class="modal" style="width:min(360px,94vw)">
     <h3 data-i18n="새 세션 — 에이전트 선택">새 세션 — 에이전트 선택</h3>
+    <div style="padding:14px 18px 0;display:flex;align-items:center;gap:8px">
+      <span style="font-size:12px;color:var(--muted)" data-i18n="모델 (Claude)">모델 (Claude)</span>
+      <select id="ag-model" style="flex:1;background:var(--panel);color:var(--fg);border:1px solid var(--border);border-radius:6px;padding:7px"></select>
+    </div>
     <div style="padding:18px;display:flex;gap:10px">
       <button class="primary" style="flex:1;padding:14px" onclick="agGo('claude')">🟧 Claude</button>
       <button class="primary" style="flex:1;padding:14px;background:#10a37f;border-color:#10a37f" onclick="agGo('codex')">🟢 Codex</button>
@@ -264,6 +270,8 @@ const EN={
 "이미지 업로드 중…":"Uploading image…","업로드 실패: ":"Upload failed: ","이미지 첨부됨":"Image attached",
 "(이미지)":"(image)","첨부한 이미지를 봐줘":"Please look at the attached image",
 "🧑 나":"🧑 You",
+"모델 (Claude)":"Model (Claude)","기본값":"Default","모델: 머신 설정":"Model: machine default",
+"기본 모델 저장됨: ":"Default model saved: ","머신 설정":"machine default",
 "🟢 Codex로 전환":"🟢 Switch to Codex","🟧 Claude로 전환":"🟧 Switch to Claude",
 "여기서 되감아 새 세션으로 이어가기":"Rewind to here — branch a new session from this point",
 "이 시점으로 되감아 새 세션을 만듭니다. 진행할까요?":"Rewind to this point and start a NEW session from here. Proceed?",
@@ -283,9 +291,30 @@ function applyStatic(){
   document.querySelectorAll("[data-i18n-title]").forEach(e=>e.title=t(e.dataset.i18nTitle));
   const lb=document.getElementById("langbtn"); if(lb) lb.textContent=LANG==="ko"?"🌐 KO":"🌐 EN";
 }
+let DEFMODEL="";
+function modelOpts(sel,cur){
+  if(!sel) return;
+  const d=t("기본값")+(DEFMODEL?` (${DEFMODEL})`:"");
+  sel.innerHTML=`<option value="">${d}</option><option value="fable">Fable 5</option><option value="opus">Opus 4.8</option><option value="sonnet">Sonnet 4.6</option><option value="haiku">Haiku 4.5</option>`;
+  sel.value=cur||"";
+}
+function fillModelSelects(){
+  const h=document.getElementById("defmodel");
+  if(h){ h.innerHTML=`<option value="">⚙ ${t("모델: 머신 설정")}</option><option value="fable">⚙ Fable 5</option><option value="opus">⚙ Opus 4.8</option><option value="sonnet">⚙ Sonnet 4.6</option><option value="haiku">⚙ Haiku 4.5</option>`; h.value=DEFMODEL; }
+  modelOpts(document.getElementById("ag-model"));
+  modelOpts(document.getElementById("tx-model"));
+}
+async function saveDefModel(v){
+  DEFMODEL=v;
+  try{await fetch("/api/prefs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({defaultModel:v})});toast(t("기본 모델 저장됨: ")+(v||t("머신 설정")));}catch(e){toast(t("오류: ")+e.message);}
+  fillModelSelects();
+}
 async function initLang(){
-  try{const r=await(await fetch("/api/prefs")).json(); if(r.ui&&r.ui.lang){LANG=r.ui.lang;localStorage.setItem("csm.lang",LANG);}}catch(e){}
-  applyStatic();
+  try{const r=await(await fetch("/api/prefs")).json();
+    if(r.ui&&r.ui.lang){LANG=r.ui.lang;localStorage.setItem("csm.lang",LANG);}
+    if(r.ui&&r.ui.defaultModel!==undefined) DEFMODEL=r.ui.defaultModel||"";
+  }catch(e){}
+  applyStatic(); fillModelSelects();
 }
 async function setLang(l){
   LANG=l; localStorage.setItem("csm.lang",l);
@@ -469,6 +498,7 @@ function txRender(d,agent){
 async function preview(mid,cwd,sessionId,agent){
   TX={mid,cwd,sessionId,agent:agent||"claude"};
   $("#tx-foot-claude").style.display = TX.agent==="codex"?"none":"flex";
+  modelOpts(document.getElementById("tx-model"));
   $("#tx-foot-codex").style.display = TX.agent==="codex"?"flex":"none";
   $("#tx").classList.add("show"); $("#tx-body").innerHTML=`<div class="empty">${t("불러오는 중…")}</div>`; $("#tx-meta").textContent="";
   try{ const d=await apiM(mid,`transcript?sessionId=${sessionId}${TX.agent==="codex"?"&agent=codex":""}`);
@@ -477,7 +507,7 @@ async function preview(mid,cwd,sessionId,agent){
   }catch(e){ $("#tx-body").innerHTML=`<div class="empty">${esc(e.message)}</div>`; }
 }
 function closeTx(){ $("#tx").classList.remove("show"); }
-function txResume(fork){ if(!TX) return; closeTx(); resume(TX.mid,TX.cwd,TX.sessionId,fork); }
+function txResume(fork){ if(!TX) return; const m=(document.getElementById("tx-model")||{}).value||DEFMODEL; closeTx(); resume(TX.mid,TX.cwd,TX.sessionId,fork,m); }
 function renderAttach(){
   const box=$("#tx-attach"), a=(TX&&TX.attachments)||[];
   box.style.display=a.length?"block":"none";
@@ -536,7 +566,7 @@ async function txSend(){
   inp.disabled=false; inp.placeholder=t("🟢 Codex 메시지… (이미지 붙여넣기 가능, Enter 전송)"); inp.focus();
 }
 let AG=null;
-function newSession(mid,cwd){ AG={mid,cwd}; $("#agpick").classList.add("show"); }
+function newSession(mid,cwd){ AG={mid,cwd}; modelOpts(document.getElementById("ag-model")); $("#agpick").classList.add("show"); }
 function agGo(kind){
   $("#agpick").classList.remove("show"); if(!AG) return;
   if(kind==="claude") launchIn(AG.mid,AG.cwd); else newCodexSession(AG.mid,AG.cwd);
@@ -608,9 +638,10 @@ async function launchIn(mid,cwd){
   const name=await uiPrompt("새 세션 이름 (선택 — 비우면 자동 생성)","");
   if(name===null) return; // 취소
   const body={cwd}; if(name.trim()) body.name=name.trim();
+  const m=(document.getElementById("ag-model")||{}).value||DEFMODEL; if(m) body.model=m;
   doLaunch(mid,body);
 }
-function resume(mid,cwd,sessionId,fork){ doLaunch(mid,{cwd,resumeId:sessionId,fork}); }
+function resume(mid,cwd,sessionId,fork,model){ const b={cwd,resumeId:sessionId,fork}; const m=model!==undefined?model:DEFMODEL; if(m) b.model=m; doLaunch(mid,b); }
 async function doLaunch(mid,body){
   toast("세션 여는 중… (trust 자동승인 + bridge 대기)");
   try{

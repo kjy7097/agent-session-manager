@@ -34,6 +34,7 @@ def main() -> int:
     fork = sys.argv[4] == "1"
     claude_path = sys.argv[5]
     prompt = sys.argv[6] if len(sys.argv) > 6 else ""
+    model = sys.argv[7] if len(sys.argv) > 7 else ""
 
     folder = os.path.realpath(os.path.expanduser(folder))
     if not os.path.isdir(folder):
@@ -41,6 +42,8 @@ def main() -> int:
         return 2
 
     argv = ["claude", "--remote-control", name]
+    if model:
+        argv += ["--model", model]
     if resume_id:
         argv += ["-r", resume_id]
         if fork:

@@ -204,6 +204,8 @@ def run(body: dict) -> dict:
     timeout = int(body.get("timeoutSec") or 240)
 
     argv = [cx, "exec", "--json", "--skip-git-repo-check", "-s", "read-only"]
+    if (body.get("model") or "").strip():
+        argv += ["-m", body["model"].strip()]
     if resume_id:
         argv += ["resume", resume_id]   # -i after `resume` attaches to the resumed turn
     for img in body.get("images") or []:
