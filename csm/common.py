@@ -181,7 +181,7 @@ def session_preview(session_id: str, limit: int = 40) -> dict:
                     txt = _text((obj.get("message") or {}).get("content")).strip()
                     if not txt or txt.startswith("<"):
                         continue
-                    msgs.append({"role": t, "text": txt[:1500], "ts": obj.get("timestamp")})
+                    msgs.append({"role": t, "text": txt[:4000], "ts": obj.get("timestamp")})
     except OSError as e:
         return {"error": str(e)}
     return {

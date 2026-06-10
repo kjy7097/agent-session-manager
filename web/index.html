@@ -462,6 +462,7 @@ async function loadSessionList(mid,cwd,query){
 function txRender(d,agent){
   const bot=agent==="codex"?"🟢 Codex":"🤖 Claude";
   $("#tx-title").textContent=d.title||t("대화 미리보기"); $("#tx-meta").textContent=LANG==="en"?`${d.total} total · ${d.messages.length} recent`:`총 ${d.total}개 · 최근 ${d.messages.length}개`;
+  TX.msgs=d.messages;
   $("#tx-body").innerHTML=d.messages.length?d.messages.map((x,i)=>`<div class="msg ${x.role}"><div class="who">${x.role==="user"?t("🧑 나"):bot}${x.ts?" · "+new Date(x.ts).toLocaleString():""}<button class="rw" onclick="rewindTo(${i})" title="${t("여기서 되감아 새 세션으로 이어가기")}">↶</button></div><div class="bubble">${esc(x.text)}</div></div>`).join(""):`<div class="empty">${t("표시할 대화가 없습니다")}</div>`;
   $("#tx-body").scrollTop=$("#tx-body").scrollHeight;
 }
@@ -503,7 +504,7 @@ async function handoff(toAgent, upToIndex){
   if(!confirm(ask)) return;
   toast(rewind ? t("되감는 중… (선택 시점까지 맥락 이전 + 새 세션)") : t("모델 전환 중… (맥락 이전 + 새 세션)"));
   const payload={sessionId:TX.sessionId,fromAgent:TX.agent,toAgent:toAgent,cwd:TX.cwd};
-  if(Number.isInteger(upToIndex)) payload.upToIndex=upToIndex;
+  if(Number.isInteger(upToIndex)){ payload.upToIndex=upToIndex; const m=(TX.msgs||[])[upToIndex]; if(m&&m.ts) payload.upToTs=m.ts; }
   try{
     const r=await apiM(TX.mid,"handoff",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
     if(!r.ok&&!r.token){ toast(t("실패: ")+(r.error||"unknown")); return; }

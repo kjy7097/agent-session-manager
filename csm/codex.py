@@ -82,7 +82,7 @@ def parse_rollout(path: Path, want_msgs: bool = False) -> dict | None:
                     if not txt or txt.startswith("<"):
                         continue  # developer scaffolding / environment_context
                     if want_msgs:
-                        msgs.append({"role": role, "text": txt[:4000], "ts": ts})
+                        msgs.append({"role": role, "text": txt[:12000], "ts": ts})
                     else:
                         msgs.append(1)
                     if role == "user" and first_prompt is None:

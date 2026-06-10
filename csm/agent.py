@@ -128,16 +128,25 @@ class Agent:
         up = body.get("upToIndex")
         if not sid:
             return {"ok": False, "error": "sessionId required"}
-        tx = self.transcript(sid, src)
+        # full history, not the 40-message preview window the modal uses
+        tx = codex.transcript(sid) if src == "codex" else common.session_preview(sid, limit=100000)
         if tx.get("error"):
             return {"ok": False, "error": f"source transcript: {tx['error']}"}
         msgs = tx.get("messages") or []
-        if isinstance(up, int) and 0 <= up < len(msgs):
+        up_ts = body.get("upToTs")
+        if up_ts:   # cut at the chosen message by timestamp (window-shift safe)
+            hits = [i for i, m in enumerate(msgs) if m.get("ts") == up_ts]
+            if hits:
+                msgs = msgs[:hits[-1] + 1]
+            elif isinstance(up, int):   # fallback: index within the UI's 40-msg tail window
+                base = max(0, len(msgs) - 40)
+                msgs = msgs[:min(len(msgs), base + up + 1)]
+        elif isinstance(up, int) and 0 <= up < len(msgs):
             msgs = msgs[:up + 1]          # keep through the chosen message
         if not msgs:
             return {"ok": False, "error": "nothing to carry over"}
         # keep the most recent turns within a budget so the seed stays sane
-        budget, kept, used = 8000, [], 0
+        budget, kept, used = 24000, [], 0
         for m in reversed(msgs):
             t = m.get("text") or ""
             if used + len(t) > budget and kept:
@@ -217,23 +226,39 @@ class Agent:
         else:
             kw["start_new_session"] = True
         subprocess.Popen(argv, **kw)
+        rec = {
+            "cwd": cwd,
+            "name": name,
+            "user_name": user_name,
+            "resume_id": resume_id,
+            "started": time.time(),
+            "state": "spawning",
+            "url": None,
+            "error": None,
+        }
         with _lock:
-            _launches[token] = {
-                "cwd": cwd,
-                "name": name,
-                "user_name": user_name,
-                "resume_id": resume_id,
-                "started": time.time(),
-                "state": "spawning",
-                "url": None,
-                "error": None,
-            }
+            _launches[token] = rec
+        try:   # persist so an agent restart doesn't orphan the UI's polling
+            (self.log_dir / f"{token}.launch.json").write_text(
+                json.dumps(rec), encoding="utf-8")
+        except OSError:
+            pass
         return {"token": token}
 
     def launch_status(self, token: str) -> dict:
         with _lock:
             rec = _launches.get(token)
             rec = dict(rec) if rec else None
+        if rec is None and token == os.path.basename(token):
+            # agent restarted mid-poll? recover the record from disk
+            f = self.log_dir / f"{token}.launch.json"
+            if f.exists():
+                try:
+                    rec = json.loads(f.read_text(encoding="utf-8"))
+                    with _lock:
+                        _launches[token] = dict(rec)
+                except (OSError, json.JSONDecodeError):
+                    rec = None
         if rec is None:
             return {"error": "unknown token"}, 404
         if rec["state"] in ("ready", "failed"):
