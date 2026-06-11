@@ -108,6 +108,7 @@
   }
   .who .rw{ background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:0 4px;margin-left:6px;opacity:.45;line-height:1; }
   .who .rw:hover{ opacity:1;color:var(--fg); }
+  @keyframes csmspin{to{transform:rotate(360deg)}}
 </style>
 </head>
 <body class="nav content">
@@ -210,6 +211,13 @@
   </div>
 </div>
 
+<div id="loading" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.55);align-items:center;justify-content:center">
+  <div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:26px 32px;text-align:center;max-width:80vw">
+    <div style="width:30px;height:30px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;margin:0 auto 14px;animation:csmspin 0.8s linear infinite"></div>
+    <div id="loading-msg" style="color:var(--fg);font-size:14px;line-height:1.5"></div>
+  </div>
+</div>
+
 <div class="modal-bg" id="picker" onclick="if(event.target.id==='picker')closePicker()">
   <div class="modal">
     <h3 id="pk-title">폴더 추가</h3>
@@ -269,7 +277,8 @@ const EN={
 "＋ 새 세션":"＋ New session","🔎 이 폴더에서 세션 검색 (제목·대화 내용)":"🔎 Search sessions in this folder (title · content)",
 "불러오는 중…":"Loading…","🔎 검색 중…":"🔎 Searching…","검색 결과 없음":"No results",
 "세션이 없습니다. ＋ 새 세션으로 시작하세요.":"No sessions yet. Start one with ＋ New session.",
-"개 메시지":" messages","모델":"Model","← 뒤로":"← Back","세션 시작":"Start session","새 Codex 세션":"New Codex session","새 Claude 세션":"New Claude session",
+"개 메시지":" messages","처리 중…":"Working…",
+"🟢 Codex 세션 생성 중… 응답까지 최대 1~2분 (앱에도 뜹니다)":"🟢 Creating Codex session… up to 1-2 min for the reply (also appears in the app)","모델":"Model","← 뒤로":"← Back","세션 시작":"Start session","새 Codex 세션":"New Codex session","새 Claude 세션":"New Claude session",
 "🟢 Codex 세션이 앱에 뜨려면, 그 폴더를 Codex 데스크톱 앱에서도 프로젝트로 추가해야 합니다. 아래 목록엔 Codex 세션이 있는 폴더만 뜨고, Codex 세션이 없는 폴더는 직접 고르세요.":"🟢 For a Codex session to show in the app, add that folder as a project in the Codex desktop app too. The list below shows only folders that already have Codex sessions; pick a folder without one yourself.","Codex 세션 있음 (앱에 표시됨)":"Has Codex sessions (shown in the app)","세션":"sessions","Codex 프로젝트 (클릭해서 추가)":"Codex projects (click to add)","🟢 새 Codex 세션 — 첫 메시지:":"🟢 New Codex session — first message:",
 "Codex 세션 생성 중… (앱에도 뜹니다)":"Creating Codex session… (also appears in the app)",
 "Codex 세션 생성됨":"Codex session created","⌨ 터미널":"⌨ Terminal","터미널에서 인터랙티브로 이어가기":"Continue interactively in a terminal","열기":"Open","👁 미리보기":"👁 Preview","Fork":"Fork","삭제":"Delete","■ 종료":"■ Stop","💬 대화":"💬 Chat",
@@ -371,10 +380,12 @@ const osIcon = os => os==="windows"?"🖥️":os==="macos"?"🍎":os==="linux"?"
 const shortModel = m => (m||"").replace(/^claude-/,"").replace(/-\d{8}$/,"");
 function termCmd(m,cwd,sid){
   const r=sid?`codex resume ${sid}`:"codex";
-  if(m.is_self) return `cd "${cwd}" && ${r}`;
+  // ssh 정보(원격 host 또는 self의 tailnet sshHost)가 있으면 ssh 포함 — 어느 PC에서든 붙여넣게
+  const host=(m.host&&m.host!=="localhost")?m.host:(m.sshHost||"");
+  if(!m.sshUser||!host) return `cd "${cwd}" && ${r}`;
   const port=(m.sshPort&&m.sshPort!==22)?` -p ${m.sshPort}`:"";
-  if(m.os==="windows") return `ssh -t${port} ${m.sshUser}@${m.host} "cd /d \"${cwd}\" && ${r}"`;
-  return `ssh -tt${port} ${m.sshUser}@${m.host} 'bash -lc "cd \"${cwd}\" && exec ${r}"'`;
+  if(m.os==="windows") return `ssh -t${port} ${m.sshUser}@${host} "cd /d \"${cwd}\" && ${r}"`;
+  return `ssh -tt${port} ${m.sshUser}@${host} 'bash -lc "cd \"${cwd}\" && exec ${r}"'`;
 }
 async function openTerm(mid,cwd,sid,model){
   toast(t("터미널 세션 여는 중…"));
@@ -599,7 +610,7 @@ async function txSend(){
   const inp=$("#tx-input"); const msg=(inp.value||"").trim();
   const imgs=((TX&&TX.attachments)||[]).map(a=>a.path);
   if((!msg&&!imgs.length)||!TX) return;
-  inp.value=""; inp.disabled=true; inp.placeholder=t("🟢 Codex 응답 대기 중… (최대 몇 분)");
+  inp.value=""; inp.disabled=true; inp.placeholder=t("🟢 Codex 응답 대기 중… (최대 몇 분)"); showLoading(t("🟢 Codex 응답 대기 중…"));
   $("#tx-body").insertAdjacentHTML("beforeend",`<div class="msg user"><div class="who">${t("🧑 나")}</div><div class="bubble">${esc(msg||t("(이미지)"))}${imgs.length?` 🖼×${imgs.length}`:""}</div></div>`);
   $("#tx-body").scrollTop=$("#tx-body").scrollHeight;
   try{
@@ -610,8 +621,10 @@ async function txSend(){
     const d=await apiM(TX.mid,`transcript?sessionId=${TX.sessionId}&agent=codex`);
     if(!d.error) txRender(d,"codex");
   }catch(e){ toast(t("오류: ")+e.message); }
-  inp.disabled=false; inp.placeholder=t("🟢 Codex 메시지… (이미지 붙여넣기 가능, Enter 전송)"); inp.focus();
+  hideLoading(); inp.disabled=false; inp.placeholder=t("🟢 Codex 메시지… (이미지 붙여넣기 가능, Enter 전송)"); inp.focus();
 }
+function showLoading(msg){ const m=$("#loading-msg"); if(m) m.textContent=msg||t("처리 중…"); const l=$("#loading"); if(l) l.style.display="flex"; }
+function hideLoading(){ const l=$("#loading"); if(l) l.style.display="none"; }
 let AG=null;
 function newSession(mid,cwd){ AG={mid,cwd}; agBack(); $("#agpick").classList.add("show"); }
 function agBack(){   // step 1로
@@ -635,7 +648,7 @@ function agStart(){
 }
 async function newCodexSession(mid,cwd,model){
   const first=await uiPrompt(t("🟢 새 Codex 세션 — 첫 메시지:")); if(!first) return;
-  toast(t("Codex 세션 생성 중… (앱에도 뜹니다)"));
+  showLoading(t("🟢 Codex 세션 생성 중… 응답까지 최대 1~2분 (앱에도 뜹니다)"));
   try{
     const r=await apiM(mid,"run",{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({agent:"codex",cwd,prompt:first,model:model||undefined})});
@@ -643,6 +656,7 @@ async function newCodexSession(mid,cwd,model){
     toast(t("Codex 세션 생성됨")); openFolder(mid,cwd);
     preview(mid,cwd,r.sessionId,"codex");
   }catch(e){ toast(t("오류: ")+e.message); }
+  finally{ hideLoading(); }
 }
 
 // picker = ADD FOLDER to a node (pin); session is created later from the folder
@@ -726,15 +740,16 @@ async function launchIn(mid,cwd){
 }
 function resume(mid,cwd,sessionId,fork,model){ const b={cwd,resumeId:sessionId,fork}; const m=model!==undefined?model:DEFMODEL; if(m) b.model=m; doLaunch(mid,b); }
 async function doLaunch(mid,body){
-  toast("세션 여는 중… (trust 자동승인 + bridge 대기)");
+  showLoading(t("🟧 Claude 세션 여는 중… (trust 자동승인 + bridge 대기)"));
   try{
     const {token,error}=await apiM(mid,"launch",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
-    if(error) return toast(t("실패: ")+error);
+    if(error){ toast(t("실패: ")+error); return; }
     for(let i=0;i<30;i++){ await sleep(1500); const st=await apiM(mid,`launch?token=${token}`);
       if(st.state==="ready"){ toast("열렸습니다 → 새 탭"); window.open(st.url,"_blank"); if(FOLDER_MACHINE===mid&&FOLDER) openFolder(mid,FOLDER); loadNodeFolders(mById(mid)); return; }
-      if(st.state==="failed") return toast(t("실패: ")+(st.error||"unknown")); }
+      if(st.state==="failed"){ toast(t("실패: ")+(st.error||"unknown")); return; } }
     toast("시간 초과 — auth/trust 확인 필요");
   }catch(e){ toast(t("오류: ")+e.message); }
+  finally{ hideLoading(); }
 }
 async function stopSession(mid,cwd,sessionId){
   if(!await uiConfirm("실행 중인 이 세션을 종료할까요?")) return;

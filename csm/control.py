@@ -72,9 +72,14 @@ def build_registry(cfg: dict) -> list[dict]:
     hostname the control machine can SSH to."""
     agent_port = cfg["agent"]["port"]
     self_name = cfg.get("selfName") or socket.gethostname().split(".")[0]
+    import getpass
+    ctl_host = (cfg.get("control") or {}).get("host") or ""
+    self_ssh_host = ctl_host if ctl_host and ctl_host not in ("127.0.0.1", "0.0.0.0", "localhost") else ""
     machines = [{
         "id": cfg.get("selfId", "local"), "name": self_name, "os": "macos",
         "host": "localhost", "online": True, "is_self": True, "agentReady": True,
+        "sshUser": cfg.get("selfSshUser") or getpass.getuser(),
+        "sshHost": self_ssh_host, "sshPort": 22,
         "baseUrl": f"http://127.0.0.1:{agent_port}",
     }]
     for m in cfg.get("machines", []):
