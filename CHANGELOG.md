@@ -5,6 +5,33 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-06-11
+
+### Changed
+- **Codex now runs through the Codex *app-server*** (`thread/start` + `turn/start`)
+  instead of `codex exec`. Sessions created this way are tagged `source=vscode`
+  with a preview, so they **show up in the Codex desktop app's project list**
+  (an `codex exec` session is `source=exec` and the app filters it out). The app
+  picks new sessions up on its next poll — no reconnect needed.
+
+### Added
+- **Terminal hand-off** — a codex session opens an interactive TUI on the PC your
+  browser is on (the control plane detects the client machine by its tailnet IP;
+  the mac opens Terminal.app, a remote PC opens a console via its own agent; the
+  session runs locally or via `ssh -t` to the target).
+- **Model selection** — pick a model per new session / per resume, and set a
+  server-saved default from the header (Claude: fable / opus / sonnet / haiku;
+  Codex: `gpt-5.5` etc.).
+- **Per-session model badge** in the session list and transcript.
+- **`codex.list_projects()` / `/codex/projects`** — the folders Codex knows as
+  projects (`config.toml [projects]`), surfaced so new codex sessions land in a
+  folder the desktop app already shows.
+
+### Notes
+- Adding a *project/folder* to the Codex desktop app must still be done **in the
+  app** (it keeps that list internally; it is not writable from outside). Add the
+  folder once in the app, then ASM sessions in that folder appear under it.
+
 ## [0.4.0] - 2026-06-09
 
 ### Added
@@ -80,6 +107,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Register machines over SSH with one-step agent deploy. English web UI. MIT.
 - Live-session count dedupes by `sessionId` (a re-exec'd session is counted once).
 
+[0.5.0]: https://github.com/kjy7097/agent-session-manager/releases/tag/v0.5.0
 [0.4.0]: https://github.com/kjy7097/agent-session-manager/releases/tag/v0.4.0
 [0.3.1]: https://github.com/kjy7097/agent-session-manager/releases/tag/v0.3.1
 [0.3.0]: https://github.com/kjy7097/agent-session-manager/releases/tag/v0.3.0
