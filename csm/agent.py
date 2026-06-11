@@ -125,7 +125,7 @@ class Agent:
                                                   delete=False, encoding="utf-8")
                 bat.write("@echo off\r\n" + cmd + "\r\n")
                 bat.close()
-                subprocess.Popen(["cmd", "/c", "start", "Codex", "cmd", "/k", bat.name])
+                subprocess.Popen(["cmd", "/c", "start", "", "cmd", "/k", bat.name])
             elif sys.platform == "darwin":
                 import tempfile
                 f = tempfile.NamedTemporaryFile("w", suffix=".command", prefix="csm-codex-",
