@@ -185,19 +185,27 @@
 
 <div class="modal-bg" id="agpick" onclick="if(event.target.id==='agpick')$('#agpick').classList.remove('show')">
   <div class="modal" style="width:min(360px,94vw)">
-    <h3 data-i18n="새 세션 — 에이전트 선택">새 세션 — 에이전트 선택</h3>
-    <div style="padding:14px 18px 0;display:flex;align-items:center;gap:8px">
-      <span style="font-size:12px;color:var(--muted)" data-i18n="모델 (Claude)">모델 (Claude)</span>
-      <select id="ag-model" style="flex:1;background:var(--panel);color:var(--fg);border:1px solid var(--border);border-radius:6px;padding:7px"></select>
+    <h3 id="ag-title" data-i18n="새 세션 — 에이전트 선택">새 세션 — 에이전트 선택</h3>
+    <!-- step 1: 에이전트 선택 -->
+    <div id="ag-step1" style="padding:18px;display:flex;gap:10px">
+      <button class="primary" style="flex:1;padding:18px;font-size:15px" onclick="agPick('claude')">🟧 Claude</button>
+      <button class="primary" style="flex:1;padding:18px;font-size:15px;background:#10a37f;border-color:#10a37f" onclick="agPick('codex')">🟢 Codex</button>
     </div>
-    <div style="padding:8px 18px 0;display:flex;align-items:center;gap:8px">
-      <span style="font-size:12px;color:var(--muted)" data-i18n="모델 (Codex)">모델 (Codex)</span>
-      <input id="ag-cxmodel" list="cx-models" placeholder="기본값 (config.toml)" data-i18n-ph="기본값 (config.toml)" style="flex:1;background:var(--panel);color:var(--fg);border:1px solid var(--border);border-radius:6px;padding:7px">
-      <datalist id="cx-models"><option value="gpt-5.5"><option value="gpt-5.4"><option value="gpt-5.4-mini"><option value="gpt-5.3-codex-spark"></datalist>
-    </div>
-    <div style="padding:18px;display:flex;gap:10px">
-      <button class="primary" style="flex:1;padding:14px" onclick="agGo('claude')">🟧 Claude</button>
-      <button class="primary" style="flex:1;padding:14px;background:#10a37f;border-color:#10a37f" onclick="agGo('codex')">🟢 Codex</button>
+    <!-- step 2: 모델 선택 + 시작 -->
+    <div id="ag-step2" style="display:none;padding:16px 18px">
+      <div id="ag-claude-row" style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+        <span style="font-size:13px;color:var(--muted);flex:0 0 auto" data-i18n="모델">모델</span>
+        <select id="ag-model" style="flex:1;background:var(--panel);color:var(--fg);border:1px solid var(--border);border-radius:6px;padding:9px"></select>
+      </div>
+      <div id="ag-codex-row" style="display:none;align-items:center;gap:8px;margin-bottom:14px">
+        <span style="font-size:13px;color:var(--muted);flex:0 0 auto" data-i18n="모델">모델</span>
+        <input id="ag-cxmodel" list="cx-models" placeholder="기본값 (config.toml)" data-i18n-ph="기본값 (config.toml)" style="flex:1;background:var(--panel);color:var(--fg);border:1px solid var(--border);border-radius:6px;padding:9px">
+        <datalist id="cx-models"><option value="gpt-5.5"><option value="gpt-5.4"><option value="gpt-5.4-mini"><option value="gpt-5.3-codex-spark"></datalist>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="ghost" style="flex:0 0 auto" onclick="agBack()" data-i18n="← 뒤로">← 뒤로</button>
+        <button class="primary" id="ag-start" style="flex:1;padding:12px" onclick="agStart()" data-i18n="세션 시작">세션 시작</button>
+      </div>
     </div>
   </div>
 </div>
@@ -261,7 +269,7 @@ const EN={
 "＋ 새 세션":"＋ New session","🔎 이 폴더에서 세션 검색 (제목·대화 내용)":"🔎 Search sessions in this folder (title · content)",
 "불러오는 중…":"Loading…","🔎 검색 중…":"🔎 Searching…","검색 결과 없음":"No results",
 "세션이 없습니다. ＋ 새 세션으로 시작하세요.":"No sessions yet. Start one with ＋ New session.",
-"개 메시지":" messages",
+"개 메시지":" messages","모델":"Model","← 뒤로":"← Back","세션 시작":"Start session","새 Codex 세션":"New Codex session","새 Claude 세션":"New Claude session",
 "🟢 Codex 세션이 앱에 뜨려면, 그 폴더를 Codex 데스크톱 앱에서도 프로젝트로 추가해야 합니다. 아래 목록엔 Codex 세션이 있는 폴더만 뜨고, Codex 세션이 없는 폴더는 직접 고르세요.":"🟢 For a Codex session to show in the app, add that folder as a project in the Codex desktop app too. The list below shows only folders that already have Codex sessions; pick a folder without one yourself.","Codex 세션 있음 (앱에 표시됨)":"Has Codex sessions (shown in the app)","세션":"sessions","Codex 프로젝트 (클릭해서 추가)":"Codex projects (click to add)","🟢 새 Codex 세션 — 첫 메시지:":"🟢 New Codex session — first message:",
 "Codex 세션 생성 중… (앱에도 뜹니다)":"Creating Codex session… (also appears in the app)",
 "Codex 세션 생성됨":"Codex session created","⌨ 터미널":"⌨ Terminal","터미널에서 인터랙티브로 이어가기":"Continue interactively in a terminal","열기":"Open","👁 미리보기":"👁 Preview","Fork":"Fork","삭제":"Delete","■ 종료":"■ Stop","💬 대화":"💬 Chat",
@@ -605,10 +613,24 @@ async function txSend(){
   inp.disabled=false; inp.placeholder=t("🟢 Codex 메시지… (이미지 붙여넣기 가능, Enter 전송)"); inp.focus();
 }
 let AG=null;
-function newSession(mid,cwd){ AG={mid,cwd}; modelOpts(document.getElementById("ag-model")); $("#agpick").classList.add("show"); }
-function agGo(kind){
+function newSession(mid,cwd){ AG={mid,cwd}; agBack(); $("#agpick").classList.add("show"); }
+function agBack(){   // step 1로
+  $("#ag-step1").style.display="flex"; $("#ag-step2").style.display="none";
+  $("#ag-title").textContent=t("새 세션 — 에이전트 선택");
+}
+function agPick(kind){   // step 2로
+  if(!AG) return; AG.kind=kind;
+  $("#ag-step1").style.display="none"; $("#ag-step2").style.display="block";
+  const isCx=kind==="codex";
+  $("#ag-claude-row").style.display=isCx?"none":"flex";
+  $("#ag-codex-row").style.display=isCx?"flex":"none";
+  $("#ag-title").textContent=isCx?t("새 Codex 세션"):t("새 Claude 세션");
+  if(!isCx) modelOpts(document.getElementById("ag-model"));
+  const btn=$("#ag-start"); btn.style.background=isCx?"#10a37f":""; btn.style.borderColor=isCx?"#10a37f":"";
+}
+function agStart(){
   $("#agpick").classList.remove("show"); if(!AG) return;
-  if(kind==="claude") launchIn(AG.mid,AG.cwd);
+  if(AG.kind==="claude") launchIn(AG.mid,AG.cwd);
   else newCodexSession(AG.mid,AG.cwd,(document.getElementById("ag-cxmodel")||{}).value||"");
 }
 async function newCodexSession(mid,cwd,model){
