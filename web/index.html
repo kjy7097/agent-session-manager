@@ -206,7 +206,7 @@
   <div class="modal">
     <h3 id="pk-title">폴더 추가</h3>
     <div class="crumbs" id="pk-crumbs"></div>
-    <div id="pk-codex" style="display:none;padding:6px 2px;border-bottom:1px solid var(--border);font-size:12px;max-height:84px;overflow:auto"></div>
+    <div id="pk-codex" style="display:none;padding:8px 4px;border-bottom:1px solid var(--border);max-height:210px;overflow:auto"></div>
     <div style="display:flex;min-height:160px;flex:1;overflow:hidden">
       <div id="pk-drives" style="display:none;flex:0 0 86px;border-right:1px solid var(--border);overflow:auto;padding:6px 4px"></div>
       <div class="dirlist" id="pk-list" style="flex:1"></div>
@@ -636,8 +636,15 @@ async function loadCodexProjects(mid){
     const ps=(r&&r.projects)||[];
     if(!ps.length) return;
     box.style.display="block";
-    box.innerHTML=`<div style="color:var(--muted);margin-bottom:4px">🟢 ${t("Codex 프로젝트 (클릭해서 추가)")}</div>`+
-      ps.map(p=>`<a href="#" onclick='pkGo(${JSON.stringify(p)});return false' title="${esc(p)}" style="display:inline-block;margin:2px 4px 2px 0;padding:3px 8px;border:1px solid #10a37f;color:#10a37f;border-radius:10px;text-decoration:none">${esc(p)}</a>`).join("");
+    box.innerHTML=`<div style="color:var(--muted);margin:0 2px 6px;font-weight:600;font-size:12px">🟢 ${t("Codex 프로젝트 (클릭해서 추가)")}</div>`+
+      ps.map(p=>{
+        const name=(p.split(/[\\/]/).filter(Boolean).pop())||p;
+        return `<div onclick='pkGo(${JSON.stringify(p)})' onmouseover="this.style.background='rgba(16,163,127,0.16)'" onmouseout="this.style.background='rgba(16,163,127,0.06)'" title="${esc(p)}" style="display:flex;align-items:center;gap:10px;padding:9px 11px;margin:4px 0;border:1px solid #10a37f;border-radius:8px;cursor:pointer;background:rgba(16,163,127,0.06)">
+          <span style="font-size:16px;flex:0 0 auto">🟢</span>
+          <div style="flex:1;min-width:0"><div style="font-weight:600;color:var(--fg);font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(name)}</div><div style="font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p)}</div></div>
+          <span style="color:#10a37f;font-size:13px;flex:0 0 auto;font-weight:600">＋</span>
+        </div>`;
+      }).join("");
   }catch(e){}
 }
 function pkGo(path){ addAndOpen(PK_MID,path); }   // 칩 클릭 = 그 codex 프로젝트 폴더를 바로 추가
