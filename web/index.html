@@ -206,6 +206,7 @@
   <div class="modal">
     <h3 id="pk-title">폴더 추가</h3>
     <div class="crumbs" id="pk-crumbs"></div>
+    <div id="pk-codex" style="display:none;padding:6px 2px;border-bottom:1px solid var(--border);font-size:12px;max-height:84px;overflow:auto"></div>
     <div style="display:flex;min-height:160px;flex:1;overflow:hidden">
       <div id="pk-drives" style="display:none;flex:0 0 86px;border-right:1px solid var(--border);overflow:auto;padding:6px 4px"></div>
       <div class="dirlist" id="pk-list" style="flex:1"></div>
@@ -259,7 +260,7 @@ const EN={
 "＋ 새 세션":"＋ New session","🔎 이 폴더에서 세션 검색 (제목·대화 내용)":"🔎 Search sessions in this folder (title · content)",
 "불러오는 중…":"Loading…","🔎 검색 중…":"🔎 Searching…","검색 결과 없음":"No results",
 "세션이 없습니다. ＋ 새 세션으로 시작하세요.":"No sessions yet. Start one with ＋ New session.",
-"개 메시지":" messages","🟢 새 Codex 세션 — 첫 메시지:":"🟢 New Codex session — first message:",
+"개 메시지":" messages","Codex 프로젝트 (앱에 표시됨)":"Codex project (shown in the app)","Codex 프로젝트 (클릭해서 추가)":"Codex projects (click to add)","🟢 새 Codex 세션 — 첫 메시지:":"🟢 New Codex session — first message:",
 "Codex 세션 생성 중… (앱에도 뜹니다)":"Creating Codex session… (also appears in the app)",
 "Codex 세션 생성됨":"Codex session created","⌨ 터미널":"⌨ Terminal","터미널에서 인터랙티브로 이어가기":"Continue interactively in a terminal","열기":"Open","👁 미리보기":"👁 Preview","Fork":"Fork","삭제":"Delete","■ 종료":"■ Stop","💬 대화":"💬 Chat",
 "📌 고정":"📌 Pin","📌 고정됨":"📌 Pinned","상단 고정":"Pin to top","상단 고정 해제":"Unpin from top",
@@ -433,6 +434,8 @@ async function loadNodeFolders(m){
   let folders=[];
   try{ folders=(await apiM(m.id,"folders")).folders||[]; }
   catch(e){ nf.innerHTML=`<div class="empty sm">${esc(e.message)}</div>`; return; }
+  let cxset=new Set();
+  try{ const cr=await apiM(m.id,"codex/projects"); (cr&&cr.projects||[]).forEach(p=>cxset.add(p)); }catch(e){}
   const have=new Set(folders.map(f=>f.cwd));
   for(const p of pins(m.id)) if(!have.has(p)) folders.push({cwd:p,session_count:0,last_activity:0});
   const pinset=new Set(pins(m.id)), topset=topF(m.id);
@@ -449,7 +452,7 @@ async function loadNodeFolders(m){
     const unpin=f.pinned?`<button class="iconbtn" title="${t("목록에서 제거(핀 해제)")}" onclick='event.stopPropagation();unpinFolder(${mj},${cj})'>✕</button>`:"";
     const topBtn=`<button class="iconbtn${f.top?" on":""}" title="${f.top?t("상단 고정 해제"):t("상단 고정")}" onclick='event.stopPropagation();toggleTopFolder(${mj},${cj})'>📌</button>`;
     return `<div class="folder${hidden?" hidden":""}${act}" data-fkey="${esc(fkey(m.id,f.cwd))}" title="${esc(f.cwd)}" onclick='openFolder(${mj},${cj})'>
-      <div class="fcol"><div class="path">${f.top?'📌 ':''}${esc(shortPath(f.cwd))}${f.live?`<span class="livecount" title="실행 중 세션 ${f.live}개">● ${f.live} live</span>`:''}</div><div class="meta">${meta}</div></div>
+      <div class="fcol"><div class="path">${f.top?'📌 ':''}${esc(shortPath(f.cwd))}${cxset.has(f.cwd)?`<span class="badge" style="color:#10a37f;border-color:#10a37f;font-size:10px;margin-left:4px;padding:0 4px" title="${t("Codex 프로젝트 (앱에 표시됨)")}">🟢</span>`:''}${f.live?`<span class="livecount" title="실행 중 세션 ${f.live}개">● ${f.live} live</span>`:''}</div><div class="meta">${meta}</div></div>
       <div class="tools">${topBtn}${trash}${unpin}</div></div>`;
   };
   const rows=folders.map((f,i)=>row(f,i>=3 && !f.top));
@@ -624,8 +627,20 @@ async function newCodexSession(mid,cwd,model){
 async function openPicker(mid,start){
   const m=mById(mid); if(!m.agentReady) return toast("에이전트가 없는 노드입니다");
   PK_MID=mid; $("#pk-title").textContent=`폴더 추가 · ${m.name}`; $("#pk-path").value="";
-  $("#picker").classList.add("show"); await pkNav(start||null);
+  $("#picker").classList.add("show"); loadCodexProjects(mid); await pkNav(start||null);
 }
+async function loadCodexProjects(mid){
+  const box=$("#pk-codex"); box.style.display="none"; box.innerHTML="";
+  try{
+    const r=await apiM(mid,"codex/projects");
+    const ps=(r&&r.projects)||[];
+    if(!ps.length) return;
+    box.style.display="block";
+    box.innerHTML=`<div style="color:var(--muted);margin-bottom:4px">🟢 ${t("Codex 프로젝트 (클릭해서 추가)")}</div>`+
+      ps.map(p=>`<a href="#" onclick='pkGo(${JSON.stringify(p)});return false' title="${esc(p)}" style="display:inline-block;margin:2px 4px 2px 0;padding:3px 8px;border:1px solid #10a37f;color:#10a37f;border-radius:10px;text-decoration:none">${esc(p)}</a>`).join("");
+  }catch(e){}
+}
+function pkGo(path){ addAndOpen(PK_MID,path); }   // 칩 클릭 = 그 codex 프로젝트 폴더를 바로 추가
 function closePicker(){ $("#picker").classList.remove("show"); }
 async function pkNav(path){
   $("#pk-list").innerHTML=`<div class="empty">${t("불러오는 중…")}</div>`;
