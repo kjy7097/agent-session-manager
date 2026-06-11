@@ -125,8 +125,9 @@ class Agent:
                                                   delete=False, encoding="utf-8")
                 bat.write("@echo off\r\n" + cmd + "\r\n")
                 bat.close()
-                # launch the .bat in its own console; codex keeps it open
-                subprocess.Popen(["cmd", "/c", "start", "Codex", "/d", os.path.dirname(bat.name) or ".", bat.name])
+                # launch the .bat in its own console; codex keeps it open.
+                # shell string so the start title stays quoted.
+                subprocess.Popen('start "Codex" "%s"' % bat.name, shell=True)
             elif sys.platform == "darwin":
                 import tempfile
                 f = tempfile.NamedTemporaryFile("w", suffix=".command", prefix="csm-codex-",
