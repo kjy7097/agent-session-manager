@@ -199,7 +199,7 @@ def _make_handler(cfg: dict):
                 import tempfile
                 f = tempfile.NamedTemporaryFile("w", suffix=".command", prefix="csm-codex-",
                                                 delete=False, encoding="utf-8")
-                f.write("#!/bin/zsh\nclear\n" + cmd + "\n")
+                f.write('#!/bin/zsh -l\nexport PATH="$HOME/.local/bin:$PATH"\nclear\n' + cmd + "\n")
                 f.close()
                 import os as _os
                 _os.chmod(f.name, 0o755)
