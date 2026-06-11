@@ -151,11 +151,8 @@ def list_folders() -> list[dict]:
     return list(by_cwd.values())
 
 
-def list_projects() -> list[str]:
-    """Folders codex knows as projects (config.toml [projects] sections).
-
-    These are the folders the Codex desktop app shows as projects, so a session
-    created in one of them appears in the app under that project."""
+def _config_projects() -> list[str]:
+    """Folders from config.toml [projects] — codex's own record of project dirs."""
     import re
     cfg = codex_home() / "config.toml"
     out: list[str] = []
@@ -166,9 +163,81 @@ def list_projects() -> list[str]:
             return out
         for m in re.finditer(r'^\[projects\.(?:"([^"]+)"|\'([^\']+)\'|([^\]"\']+))\]', txt, re.M):
             p = m.group(1) or m.group(2) or m.group(3)
-            if p and os.path.isdir(os.path.expanduser(p)):
+            if p:
                 out.append(p)
     return out
+
+
+def list_projects() -> list[dict]:
+    """Project folders as the Codex app sees them.
+
+    The desktop app builds its project picker from the cwds returned by the
+    app-server's `thread/list` (same RPC, same default source filter), so we
+    query that and dedupe by cwd. config.toml [projects] entries are folded in
+    as a fallback (marked has_sessions=False). Returns
+    [{cwd, has_sessions}] newest-first."""
+    import threading
+    import time as _t
+    cx = codex_path()
+    seen: dict[str, dict] = {}
+    if cx:
+        p = subprocess.Popen([cx, "app-server"], stdin=subprocess.PIPE,
+                             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                             text=True, bufsize=1)
+        out: list[str] = []
+        threading.Thread(target=lambda: [out.append(l) for l in p.stdout], daemon=True).start()
+
+        def send(o):
+            p.stdin.write(json.dumps(o) + "\n")
+            p.stdin.flush()
+
+        def wait(rid, t=15):
+            t0 = _t.time()
+            while _t.time() - t0 < t:
+                for l in list(out):
+                    try:
+                        o = json.loads(l)
+                    except Exception:
+                        continue
+                    if o.get("id") == rid:
+                        return o
+                _t.sleep(0.1)
+            return None
+
+        try:
+            send({"id": 1, "method": "initialize",
+                  "params": {"clientInfo": {"name": "asm", "version": "1"}}})
+            if wait(1, 15):
+                send({"method": "initialized", "params": {}})
+                _t.sleep(0.2)
+                cursor = None
+                for _ in range(10):   # paginate
+                    params = {"limit": 100}
+                    if cursor:
+                        params["cursor"] = cursor
+                    send({"id": 2, "method": "thread/list", "params": params})
+                    r = wait(2, 15)
+                    if not r or "result" not in r:
+                        break
+                    for th in r["result"].get("data") or []:
+                        cwd = th.get("cwd")
+                        if cwd and cwd not in seen:
+                            seen[cwd] = {"cwd": cwd, "has_sessions": True}
+                    cursor = r["result"].get("nextCursor")
+                    if not cursor:
+                        break
+        except Exception:
+            pass
+        finally:
+            try:
+                p.terminate()
+            except Exception:
+                pass
+    # fold in config.toml [projects] not already present
+    for cwd in _config_projects():
+        if cwd not in seen and os.path.isdir(os.path.expanduser(cwd)):
+            seen[cwd] = {"cwd": cwd, "has_sessions": False}
+    return list(seen.values())
 
 
 def _appserver_session(cwd: str, prompt: str, model: str = "",
