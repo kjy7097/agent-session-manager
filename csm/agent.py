@@ -109,6 +109,36 @@ class Agent:
         p.write_bytes(data)
         return {"ok": True, "path": str(p)}
 
+    def open_terminal(self, body: dict) -> dict:
+        """Open a terminal window on THIS machine running the given command.
+        Used so the codex TUI appears on whichever PC the browser is on."""
+        cmd = (body.get("cmd") or "").strip()
+        if not cmd:
+            return {"ok": False, "error": "cmd required"}
+        try:
+            if IS_WIN:
+                # AtLogon scheduled-task agent runs in the user session, so a new
+                # console window is visible on the desktop.
+                subprocess.Popen(["cmd", "/c", "start", "Codex", "cmd", "/k", cmd])
+            elif sys.platform == "darwin":
+                import tempfile
+                f = tempfile.NamedTemporaryFile("w", suffix=".command", prefix="csm-codex-",
+                                                delete=False, encoding="utf-8")
+                f.write('#!/bin/zsh -l\nexport PATH="$HOME/.local/bin:$PATH"\nclear\n' + cmd + "\n")
+                f.close(); os.chmod(f.name, 0o755)
+                subprocess.run(["open", "-a", "Terminal", f.name], capture_output=True, timeout=10)
+            else:
+                from shutil import which
+                term = next((c for c in ("x-terminal-emulator", "gnome-terminal", "konsole", "xterm") if which(c)), None)
+                if not term:
+                    return {"ok": False, "error": "no desktop terminal on this machine", "cmd": cmd}
+                argv = ([term, "-e", f"bash -lc '{cmd}; exec bash'"] if term == "xterm"
+                        else [term, "--", "bash", "-lc", f"{cmd}; exec bash"])
+                subprocess.Popen(argv, start_new_session=True)
+        except Exception as e:
+            return {"ok": False, "error": str(e), "cmd": cmd}
+        return {"ok": True}
+
     def handoff(self, body: dict) -> dict:
         """Branch a session into a NEW session, optionally under the other agent.
 
@@ -438,6 +468,8 @@ def _make_handler(agent: Agent):
                 return self._send(agent.upload(body or {}))
             if u.path == "/handoff":
                 return self._send(agent.handoff(body or {}))
+            if u.path == "/termopen":
+                return self._send(agent.open_terminal(body or {}))
             if u.path == "/manager":
                 b = body or {}
                 cwd = b.get("cwd") or "~/.csm-manager"

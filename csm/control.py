@@ -164,49 +164,93 @@ def _make_handler(cfg: dict):
             config_path().write_text(json.dumps(cfg, indent=2), encoding="utf-8")
             registry["cfg"] = cfg
 
+        def _ssh_cmd(self, target, run, cwd):
+            """Build an ssh -t command from the client machine to `target`."""
+            cfgm = next((x for x in registry["cfg"].get("machines", []) if x.get("id") == target["id"]), {})
+            user, host = cfgm.get("sshUser") or "", target.get("host") or ""
+            port = int(cfgm.get("sshPort") or 22)
+            pflag = f" -p {port}" if port != 22 else ""
+            if not user or not host:
+                return None
+            bq = "\\\""
+            if target.get("os") == "windows":
+                return f'ssh -t{pflag} {user}@{host} "cd /d {bq}{cwd}{bq} && {run}"'
+            return f"ssh -tt{pflag} {user}@{host} 'bash -lc \"cd {bq}{cwd}{bq} && exec {run}\"'"
+
+        def _client_machine(self, machines):
+            """Which registered machine is the browser on? Match the HTTP client
+            IP against each machine's tailnet host; fall back to the control mac."""
+            ip = self.client_address[0]
+            for m in machines:
+                if not m.get("is_self") and m.get("host") == ip:
+                    return m
+            return next((m for m in machines if m.get("is_self")), None)
+
         def _terminal(self):
-            """Open Terminal.app on the control host running codex (new/resume) —
-            same one-click UX as a claude launch, but the session lives in a
-            local terminal window (ssh -tt to remote machines)."""
+            """Open a codex terminal on the PC the browser is actually on.
+
+            The control host identifies the client machine by its tailnet IP. If
+            that's the mac, it opens Terminal.app here; if it's a remote PC, it
+            asks that PC's agent to open a window on its own desktop. The codex
+            command runs locally when the session lives on the client machine,
+            otherwise via ssh -t to the target."""
             b = self._read_body() or {}
             mid = b.get("mid") or ""
             cwd = (b.get("cwd") or "").strip()
             sid = (b.get("sessionId") or "").strip()
             model = (b.get("model") or "").strip()
-            refresh()
-            m = registry["by_id"].get(mid)
-            if not m or not cwd:
+            machines = refresh()
+            target = registry["by_id"].get(mid)
+            if not target or not cwd:
                 return self._json({"error": "mid/cwd required"}, 400)
             run = f"codex resume {sid}" if sid else "codex"
             if model:
                 run += f" -m {model}"
-            if m.get("is_self"):
-                cmd = f'cd "{cwd}" && {run}'
+
+            client = self._client_machine(machines)
+            on_client = client and client["id"] == target["id"]
+            if on_client:
+                cmd = f'cd "{cwd}" && {run}'      # session lives on the client PC
             else:
-                cfgm = next((x for x in registry["cfg"].get("machines", []) if x.get("id") == mid), {})
-                user, host = cfgm.get("sshUser") or "", m.get("host") or ""
-                port = int(cfgm.get("sshPort") or 22)
-                pflag = f" -p {port}" if port != 22 else ""
-                if not user or not host:
-                    return self._json({"error": "machine has no ssh info"}, 400)
-                bq = "\\\""   # literal \" — quoting for the nested remote shell
-                if m.get("os") == "windows":
-                    cmd = f'ssh -t{pflag} {user}@{host} "cd /d {bq}{cwd}{bq} && {run}"'
-                else:
-                    cmd = f"ssh -tt{pflag} {user}@{host} 'bash -lc \"cd {bq}{cwd}{bq} && exec {run}\"'"
-            # .command file + `open -a Terminal` — no Automation (TCC) permission needed
+                cmd = self._ssh_cmd(target, run, cwd)   # client ssh's into the target
+                if not cmd:
+                    return self._json({"error": "target machine has no ssh info"}, 400)
+
+            # Open the window on the client PC: the mac opens it directly,
+            # a remote client PC opens it via its own agent.
+            if client and client.get("is_self"):
+                try:
+                    import tempfile
+                    f = tempfile.NamedTemporaryFile("w", suffix=".command", prefix="csm-codex-",
+                                                    delete=False, encoding="utf-8")
+                    f.write('#!/bin/zsh -l\nexport PATH="$HOME/.local/bin:$PATH"\nclear\n' + cmd + "\n")
+                    f.close()
+                    import os as _os
+                    _os.chmod(f.name, 0o755)
+                    subprocess.run(["open", "-a", "Terminal", f.name], capture_output=True, timeout=10)
+                except Exception as e:
+                    return self._json({"ok": False, "error": str(e), "cmd": cmd})
+                return self._json({"ok": True, "where": client["name"], "cmd": cmd})
+
+            # remote client PC → ask its agent to open a window
+            secret = registry["cfg"]["secret"]
+            for mm in registry["cfg"].get("machines", []):
+                if mm.get("id") == client["id"] and mm.get("secret"):
+                    secret = mm["secret"]
+                    break
             try:
-                import tempfile
-                f = tempfile.NamedTemporaryFile("w", suffix=".command", prefix="csm-codex-",
-                                                delete=False, encoding="utf-8")
-                f.write('#!/bin/zsh -l\nexport PATH="$HOME/.local/bin:$PATH"\nclear\n' + cmd + "\n")
-                f.close()
-                import os as _os
-                _os.chmod(f.name, 0o755)
-                subprocess.run(["open", "-a", "Terminal", f.name], capture_output=True, timeout=10)
+                req = urllib.request.Request(
+                    client["baseUrl"].rstrip("/") + "/termopen",
+                    data=json.dumps({"cmd": cmd}).encode(), method="POST")
+                req.add_header("Authorization", f"Bearer {secret}")
+                req.add_header("Content-Type", "application/json")
+                with urllib.request.urlopen(req, timeout=15) as resp:
+                    r = json.loads(resp.read() or b"{}")
+                r.setdefault("where", client["name"])
+                r.setdefault("cmd", cmd)
+                return self._json(r)
             except Exception as e:
                 return self._json({"ok": False, "error": str(e), "cmd": cmd})
-            return self._json({"ok": True, "cmd": cmd})
 
         def _m_add(self):
             import re as _re

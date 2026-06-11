@@ -170,10 +170,16 @@
       <button onclick="txResume(false)" data-i18n="이어가기">이어가기</button>
       <button class="ghost" onclick="txResume(true)">Fork</button></div>
     <div id="tx-attach" style="display:none;padding:4px 18px;font-size:12px;color:var(--muted)"></div>
-    <div class="modal-foot" id="tx-foot-codex" style="display:none"><div class="cur"></div>
-      <button class="ghost" onclick="handoff('claude')" data-i18n="🟧 Claude로 전환" title="이 대화를 Claude 새 세션으로 이어갑니다">🟧 Claude로 전환</button>
-      <button onclick="closeTx()" data-i18n="닫기">닫기</button>
-      <button class="primary" onclick="openTerm(TX.mid,TX.cwd,TX.sessionId);closeTx()" data-i18n="이어가기">이어가기</button></div>
+    <div class="modal-foot" id="tx-foot-codex" style="display:none">
+      <input type="file" id="tx-file" accept="image/*" multiple style="display:none" onchange="for(const f of this.files)attachImage(f);this.value=''">
+      <button class="ghost" onclick="$('#tx-file').click()" data-i18n-title="이미지 첨부 (또는 입력창에 붙여넣기)" title="이미지 첨부">📎</button>
+      <input id="tx-input" class="searchbox" style="flex:1" data-i18n-ph="🟢 Codex 메시지… (이미지 붙여넣기 가능, Enter 전송)" placeholder="🟢 Codex 메시지… (이미지 붙여넣기 가능, Enter 전송)"
+             onkeydown="if(event.key==='Enter')txSend()"
+             onpaste="for(const it of (event.clipboardData||{}).items||[]){if(it.type.startsWith('image/')){attachImage(it.getAsFile());event.preventDefault();}}">
+      <button class="primary" onclick="txSend()" data-i18n="보내기">보내기</button>
+      <button class="ghost" onclick="openTerm(TX.mid,TX.cwd,TX.sessionId);closeTx()" title="터미널에서 인터랙티브로 이어가기" data-i18n="⌨ 터미널">⌨ 터미널</button>
+      <button class="ghost" onclick="handoff('claude')" data-i18n="🟧 Claude로 전환" title="이 대화를 Claude 새 세션으로">🟧 Claude로 전환</button>
+      <button onclick="closeTx()" data-i18n="닫기">닫기</button></div>
   </div>
 </div>
 
@@ -253,7 +259,7 @@ const EN={
 "＋ 새 세션":"＋ New session","🔎 이 폴더에서 세션 검색 (제목·대화 내용)":"🔎 Search sessions in this folder (title · content)",
 "불러오는 중…":"Loading…","🔎 검색 중…":"🔎 Searching…","검색 결과 없음":"No results",
 "세션이 없습니다. ＋ 새 세션으로 시작하세요.":"No sessions yet. Start one with ＋ New session.",
-"개 메시지":" messages","열기":"Open","👁 미리보기":"👁 Preview","Fork":"Fork","삭제":"Delete","■ 종료":"■ Stop","💬 대화":"💬 Chat",
+"개 메시지":" messages","⌨ 터미널":"⌨ Terminal","터미널에서 인터랙티브로 이어가기":"Continue interactively in a terminal","열기":"Open","👁 미리보기":"👁 Preview","Fork":"Fork","삭제":"Delete","■ 종료":"■ Stop","💬 대화":"💬 Chat",
 "📌 고정":"📌 Pin","📌 고정됨":"📌 Pinned","상단 고정":"Pin to top","상단 고정 해제":"Unpin from top",
 "폴더 없음 — ＋로 추가":"No folders — add with ＋","📌 추가됨":"📌 added","더보기":"Show more","접기":"Show less",
 "이 폴더 세션 전체 삭제":"Delete all sessions in this folder","목록에서 제거(핀 해제)":"Remove from list (unpin)","머신 제거":"Remove machine",
@@ -501,8 +507,8 @@ async function loadSessionList(mid,cwd,query){
         <div class="sub">${esc(s.first_prompt||"")}</div>
         <div class="sub">${s.msg_count}${t("개 메시지")} · ${when} · <code>${s.session_id.slice(0,8)}</code></div>${snip}
         <div class="actions">
-          <button onclick='preview(${mj},${cj},${sj},"codex")'>${t("👁 미리보기")}</button>
-          <button class="primary" onclick='openTerm(${mj},${cj},${sj})'>${t("이어가기")}</button>
+          <button onclick='preview(${mj},${cj},${sj},"codex")'>${t("💬 대화")}</button>
+          <button class="primary" onclick='openTerm(${mj},${cj},${sj})' title="${t("터미널에서 인터랙티브로 이어가기")}">${t("⌨ 터미널")}</button>
           ${pinBtn}<button class="ghost danger" onclick='del(${mj},${cj},${sj},false,"codex")'>${t("삭제")}</button></div></div>`;
     }
     return `<div class="session"><div class="row1"><span class="title">${s._top?"📌 ":""}${esc(s.title)}</span>${badges}</div>
