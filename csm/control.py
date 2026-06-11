@@ -138,6 +138,8 @@ def _make_handler(cfg: dict):
                     ui["defaultModel"] = str(b["defaultModel"] or "")[:40]
                 self._save_cfg(cfg)
                 return self._json({"ok": True, "ui": ui})
+            if p == "/api/terminal":
+                return self._terminal()
             if p == "/api/deploy":
                 return self._deploy()
             if p == "/api/machines/add":
@@ -161,6 +163,50 @@ def _make_handler(cfg: dict):
             from .config import config_path
             config_path().write_text(json.dumps(cfg, indent=2), encoding="utf-8")
             registry["cfg"] = cfg
+
+        def _terminal(self):
+            """Open Terminal.app on the control host running codex (new/resume) —
+            same one-click UX as a claude launch, but the session lives in a
+            local terminal window (ssh -tt to remote machines)."""
+            b = self._read_body() or {}
+            mid = b.get("mid") or ""
+            cwd = (b.get("cwd") or "").strip()
+            sid = (b.get("sessionId") or "").strip()
+            model = (b.get("model") or "").strip()
+            refresh()
+            m = registry["by_id"].get(mid)
+            if not m or not cwd:
+                return self._json({"error": "mid/cwd required"}, 400)
+            run = f"codex resume {sid}" if sid else "codex"
+            if model:
+                run += f" -m {model}"
+            if m.get("is_self"):
+                cmd = f'cd "{cwd}" && {run}'
+            else:
+                cfgm = next((x for x in registry["cfg"].get("machines", []) if x.get("id") == mid), {})
+                user, host = cfgm.get("sshUser") or "", m.get("host") or ""
+                port = int(cfgm.get("sshPort") or 22)
+                pflag = f" -p {port}" if port != 22 else ""
+                if not user or not host:
+                    return self._json({"error": "machine has no ssh info"}, 400)
+                bq = "\\\""   # literal \" — quoting for the nested remote shell
+                if m.get("os") == "windows":
+                    cmd = f'ssh -t{pflag} {user}@{host} "cd /d {bq}{cwd}{bq} && {run}"'
+                else:
+                    cmd = f"ssh -tt{pflag} {user}@{host} 'bash -lc \"cd {bq}{cwd}{bq} && exec {run}\"'"
+            # .command file + `open -a Terminal` — no Automation (TCC) permission needed
+            try:
+                import tempfile
+                f = tempfile.NamedTemporaryFile("w", suffix=".command", prefix="csm-codex-",
+                                                delete=False, encoding="utf-8")
+                f.write('#!/bin/zsh -l\nexport PATH="$HOME/.local/bin:$PATH"\nclear\n' + cmd + "\n")
+                f.close()
+                import os as _os
+                _os.chmod(f.name, 0o755)
+                subprocess.run(["open", "-a", "Terminal", f.name], capture_output=True, timeout=10)
+            except Exception as e:
+                return self._json({"ok": False, "error": str(e), "cmd": cmd})
+            return self._json({"ok": True, "cmd": cmd})
 
         def _m_add(self):
             import re as _re

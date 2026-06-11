@@ -109,49 +109,6 @@ class Agent:
         p.write_bytes(data)
         return {"ok": True, "path": str(p)}
 
-    def terminal(self, body: dict) -> dict:
-        """Open a terminal window on THIS machine running codex (new/resume) —
-        the codex counterpart of a claude launch. The window appears on the
-        machine's own desktop, so the user sitting at it can chat right away."""
-        cwd = (body.get("cwd") or "").strip()
-        sid = (body.get("sessionId") or "").strip()
-        model = (body.get("model") or "").strip()
-        if not cwd or not os.path.isdir(os.path.expanduser(cwd)):
-            return {"ok": False, "error": f"folder not found: {cwd}"}
-        run = f"codex resume {sid}" if sid else "codex"
-        if model:
-            run += f" -m {model}"
-        try:
-            if IS_WIN:
-                inner = f'cd /d "{cwd}" && {run}'
-                subprocess.Popen(["cmd", "/c", "start", "Codex", "cmd", "/k", inner],
-                                 creationflags=subprocess.CREATE_NO_WINDOW)
-            elif sys.platform == "darwin":
-                import tempfile
-                f = tempfile.NamedTemporaryFile("w", suffix=".command", prefix="csm-codex-",
-                                                delete=False, encoding="utf-8")
-                f.write('#!/bin/zsh -l\nexport PATH="$HOME/.local/bin:$PATH"\nclear\ncd "'
-                        + cwd + '" && ' + run + "\n")
-                f.close()
-                os.chmod(f.name, 0o755)
-                subprocess.run(["open", "-a", "Terminal", f.name], capture_output=True, timeout=10)
-            else:   # linux: needs a desktop session
-                term = None
-                for cand in ("x-terminal-emulator", "gnome-terminal", "konsole", "xterm"):
-                    from shutil import which
-                    if which(cand):
-                        term = cand
-                        break
-                if not term:
-                    return {"ok": False, "error": "no desktop terminal found on this machine",
-                            "cmd": f'cd "{cwd}" && {run}'}
-                argv = [term, "--", "bash", "-lc", f'cd "{cwd}" && exec {run}'] \
-                    if term != "xterm" else [term, "-e", f'cd "{cwd}" && exec {run}']
-                subprocess.Popen(argv, start_new_session=True)
-        except Exception as e:
-            return {"ok": False, "error": str(e), "cmd": f'cd "{cwd}" && {run}'}
-        return {"ok": True}
-
     def handoff(self, body: dict) -> dict:
         """Branch a session into a NEW session, optionally under the other agent.
 
@@ -481,8 +438,6 @@ def _make_handler(agent: Agent):
                 return self._send(agent.upload(body or {}))
             if u.path == "/handoff":
                 return self._send(agent.handoff(body or {}))
-            if u.path == "/terminal":
-                return self._send(agent.terminal(body or {}))
             if u.path == "/manager":
                 b = body or {}
                 cwd = b.get("cwd") or "~/.csm-manager"
