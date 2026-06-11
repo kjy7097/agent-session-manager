@@ -387,7 +387,7 @@ const mById = id => MACHINES.find(m=>m.id===id)||{};
 const osIcon = os => os==="windows"?"🖥️":os==="macos"?"🍎":os==="linux"?"🐧":"💻";
 const shortModel = m => (m||"").replace(/^claude-/,"").replace(/-\d{8}$/,"");
 function termCmd(m,cwd,sid,agent){
-  const r=(agent==="claude")?(sid?`claude -r ${sid}`:"claude"):(sid?`codex resume ${sid}`:"codex");
+  const r=(agent==="claude")?(sid?`claude --remote-control --resume ${sid}`:"claude --remote-control"):(sid?`codex resume ${sid}`:"codex");
   // ssh 정보(원격 host 또는 self의 tailnet sshHost)가 있으면 ssh 포함 — 어느 PC에서든 붙여넣게
   const host=(m.host&&m.host!=="localhost")?m.host:(m.sshHost||"");
   if(!m.sshUser||!host) return `cd "${cwd}" && ${r}`;
