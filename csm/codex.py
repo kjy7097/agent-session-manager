@@ -233,10 +233,6 @@ def list_projects() -> list[dict]:
                 p.terminate()
             except Exception:
                 pass
-    # fold in config.toml [projects] not already present
-    for cwd in _config_projects():
-        if cwd not in seen and os.path.isdir(os.path.expanduser(cwd)):
-            seen[cwd] = {"cwd": cwd, "has_sessions": False}
     return list(seen.values())
 
 
