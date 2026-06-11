@@ -271,7 +271,7 @@ const EN={
 "(이미지)":"(image)","첨부한 이미지를 봐줘":"Please look at the attached image",
 "🧑 나":"🧑 You",
 "터미널":"Terminal","터미널 세션 여는 중…":"Opening terminal session…",
-"🖥 터미널 창에서 열렸습니다 (mac)":"🖥 Opened in a Terminal window (on the mac)",
+"화면에 터미널이 열렸습니다":"— terminal opened on its screen",
 "명령을 클립보드에 복사했습니다 — 터미널에 붙여넣으세요":"Command copied — paste it into your terminal","모델 (Codex)":"Model (Codex)","기본값 (config.toml)":"default (config.toml)",
 "터미널에서 인터랙티브로 이어가기 (SSH)":"Continue interactively in your terminal (SSH)",
 "복사됨! 터미널에 붙여넣으세요:":"Copied! Paste into your terminal:",
@@ -360,9 +360,9 @@ function termCmd(m,cwd,sid){
 async function openTerm(mid,cwd,sid,model){
   toast(t("터미널 세션 여는 중…"));
   try{
-    const r=await(await fetch("/api/terminal",{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({mid,cwd,sessionId:sid||"",model:model||""})})).json();
-    if(r.ok){ toast(t("🖥 터미널 창에서 열렸습니다 (mac)")); return; }
+    const r=await apiM(mid,"terminal",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({cwd,sessionId:sid||"",model:model||""})});
+    if(r.ok){ const m=mById(mid); toast(`🖥 ${esc((m||{}).name||mid)} ${t("화면에 터미널이 열렸습니다")}`); return; }
     // fallback (e.g. control couldn't open Terminal): copy the command
     const cmd=r.cmd||termCmd(mById(mid)||{},cwd,sid);
     try{ const ta=document.createElement("textarea"); ta.value=cmd; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove(); }catch(e){}
