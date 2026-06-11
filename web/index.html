@@ -202,8 +202,13 @@
       </div>
       <div id="ag-codex-row" style="display:none;align-items:center;gap:8px;margin-bottom:14px">
         <span style="font-size:13px;color:var(--muted);flex:0 0 auto" data-i18n="모델">모델</span>
-        <input id="ag-cxmodel" list="cx-models" placeholder="기본값 (config.toml)" data-i18n-ph="기본값 (config.toml)" style="flex:1;background:var(--panel);color:var(--fg);border:1px solid var(--border);border-radius:6px;padding:9px">
-        <datalist id="cx-models"><option value="gpt-5.5"><option value="gpt-5.4"><option value="gpt-5.4-mini"><option value="gpt-5.3-codex-spark"></datalist>
+        <select id="ag-cxmodel" style="flex:1;background:var(--panel);color:var(--fg);border:1px solid var(--border);border-radius:6px;padding:9px">
+        <option value="" data-i18n="기본값 (config.toml)">기본값 (config.toml)</option>
+        <option value="gpt-5.5">gpt-5.5</option>
+        <option value="gpt-5.4">gpt-5.4</option>
+        <option value="gpt-5.4-mini">gpt-5.4-mini</option>
+        <option value="gpt-5.3-codex-spark">gpt-5.3-codex-spark</option>
+      </select>
       </div>
       <div style="display:flex;gap:8px">
         <button class="ghost" style="flex:0 0 auto" onclick="agBack()" data-i18n="← 뒤로">← 뒤로</button>
