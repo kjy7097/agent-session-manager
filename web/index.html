@@ -289,7 +289,7 @@ const EN={
 "🟢 Codex 세션 생성 중… 응답까지 최대 1~2분 (앱에도 뜹니다)":"🟢 Creating Codex session… up to 1-2 min for the reply (also appears in the app)","모델":"Model","← 뒤로":"← Back","세션 시작":"Start session","새 Codex 세션":"New Codex session","새 Claude 세션":"New Claude session",
 "🟢 Codex 세션이 앱에 뜨려면, 그 폴더를 Codex 데스크톱 앱에서도 프로젝트로 추가해야 합니다. 아래 목록엔 Codex 세션이 있는 폴더만 뜨고, Codex 세션이 없는 폴더는 직접 고르세요.":"🟢 For a Codex session to show in the app, add that folder as a project in the Codex desktop app too. The list below shows only folders that already have Codex sessions; pick a folder without one yourself.","Codex 세션 있음 (앱에 표시됨)":"Has Codex sessions (shown in the app)","세션":"sessions","Codex 프로젝트 (클릭해서 추가)":"Codex projects (click to add)","🟢 새 Codex 세션 — 첫 메시지:":"🟢 New Codex session — first message:",
 "Codex 세션 생성 중… (앱에도 뜹니다)":"Creating Codex session… (also appears in the app)",
-"Codex 세션 생성됨":"Codex session created","⌨ 터미널":"⌨ Terminal","터미널에서 인터랙티브로 이어가기":"Continue interactively in a terminal","열기":"Open","👁 미리보기":"👁 Preview","Fork":"Fork","삭제":"Delete","■ 종료":"■ Stop","💬 대화":"💬 Chat",
+"Codex 세션 생성됨":"Codex session created","⌨ 터미널":"⌨ Terminal","📋 터미널 명령 복사됨 — 터미널에 붙여넣으세요":"📋 Terminal command copied — paste it into your terminal","아래 명령을 복사해 터미널에서 실행:":"Copy this command and run it in your terminal:","터미널에서 이어가기 (SSH 명령 복사)":"Continue in a terminal (copy SSH command)","터미널에서 인터랙티브로 이어가기":"Continue interactively in a terminal","열기":"Open","👁 미리보기":"👁 Preview","Fork":"Fork","삭제":"Delete","■ 종료":"■ Stop","💬 대화":"💬 Chat",
 "📌 고정":"📌 Pin","📌 고정됨":"📌 Pinned","상단 고정":"Pin to top","상단 고정 해제":"Unpin from top",
 "폴더 없음 — ＋로 추가":"No folders — add with ＋","📌 추가됨":"📌 added","더보기":"Show more","접기":"Show less",
 "이 폴더 세션 전체 삭제":"Delete all sessions in this folder","목록에서 제거(핀 해제)":"Remove from list (unpin)","머신 제거":"Remove machine",
@@ -386,14 +386,23 @@ let MACHINES=[], FOLDER=null, FOLDER_MACHINE=null, PK_MID=null, PK_PATH=null, TX
 const mById = id => MACHINES.find(m=>m.id===id)||{};
 const osIcon = os => os==="windows"?"🖥️":os==="macos"?"🍎":os==="linux"?"🐧":"💻";
 const shortModel = m => (m||"").replace(/^claude-/,"").replace(/-\d{8}$/,"");
-function termCmd(m,cwd,sid){
-  const r=sid?`codex resume ${sid}`:"codex";
+function termCmd(m,cwd,sid,agent){
+  const r=(agent==="claude")?(sid?`claude -r ${sid}`:"claude"):(sid?`codex resume ${sid}`:"codex");
   // ssh 정보(원격 host 또는 self의 tailnet sshHost)가 있으면 ssh 포함 — 어느 PC에서든 붙여넣게
   const host=(m.host&&m.host!=="localhost")?m.host:(m.sshHost||"");
   if(!m.sshUser||!host) return `cd "${cwd}" && ${r}`;
   const port=(m.sshPort&&m.sshPort!==22)?` -p ${m.sshPort}`:"";
   if(m.os==="windows") return `ssh -t${port} ${m.sshUser}@${host} "cd /d \"${cwd}\" && ${r}"`;
   return `ssh -tt${port} ${m.sshUser}@${host} 'bash -lc "cd \"${cwd}\" && exec ${r}"'`;
+}
+async function copyTermCmd(mid,cwd,sid,agent){
+  const m=mById(mid); if(!m) return;
+  const cmd=termCmd(m,cwd,sid,agent);
+  let ok=false;
+  try{ await navigator.clipboard.writeText(cmd); ok=true; }catch(e){
+    try{ const ta=document.createElement("textarea"); ta.value=cmd; document.body.appendChild(ta); ta.select(); ok=document.execCommand("copy"); ta.remove(); }catch(e2){}
+  }
+  if(ok) toast(t("📋 터미널 명령 복사됨 — 터미널에 붙여넣으세요")); else await uiPrompt(t("아래 명령을 복사해 터미널에서 실행:"),cmd);
 }
 async function openTerm(mid,cwd,sid,model){
   toast(t("터미널 세션 여는 중…"));
@@ -550,6 +559,7 @@ async function loadSessionList(mid,cwd,query){
         <button onclick='preview(${mj},${cj},${sj})'>${t("👁 미리보기")}</button>
         <button onclick='resume(${mj},${cj},${sj},false)'>${t("이어가기")}</button>
         <button class="ghost" onclick='resume(${mj},${cj},${sj},true)'>Fork</button>
+        <button class="ghost" onclick='copyTermCmd(${mj},${cj},${sj},"claude")' title="${t("터미널에서 이어가기 (SSH 명령 복사)")}">⌨</button>
         ${stopBtn}${pinBtn}<button class="ghost danger" onclick='del(${mj},${cj},${sj},${s.is_live})'>${t("삭제")}</button></div></div>`;
   }).join("");
 }
