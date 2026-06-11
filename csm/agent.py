@@ -432,6 +432,8 @@ def _make_handler(agent: Agent):
                 return self._send(agent.health())
             if u.path == "/folders":
                 return self._send(agent.folders())
+            if u.path == "/codex/projects":
+                return self._send({"projects": codex.list_projects()})
             if u.path == "/sessions":
                 cwd = (q.get("cwd") or [""])[0]
                 if not cwd:

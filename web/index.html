@@ -259,7 +259,9 @@ const EN={
 "＋ 새 세션":"＋ New session","🔎 이 폴더에서 세션 검색 (제목·대화 내용)":"🔎 Search sessions in this folder (title · content)",
 "불러오는 중…":"Loading…","🔎 검색 중…":"🔎 Searching…","검색 결과 없음":"No results",
 "세션이 없습니다. ＋ 새 세션으로 시작하세요.":"No sessions yet. Start one with ＋ New session.",
-"개 메시지":" messages","⌨ 터미널":"⌨ Terminal","터미널에서 인터랙티브로 이어가기":"Continue interactively in a terminal","열기":"Open","👁 미리보기":"👁 Preview","Fork":"Fork","삭제":"Delete","■ 종료":"■ Stop","💬 대화":"💬 Chat",
+"개 메시지":" messages","🟢 새 Codex 세션 — 첫 메시지:":"🟢 New Codex session — first message:",
+"Codex 세션 생성 중… (앱에도 뜹니다)":"Creating Codex session… (also appears in the app)",
+"Codex 세션 생성됨":"Codex session created","⌨ 터미널":"⌨ Terminal","터미널에서 인터랙티브로 이어가기":"Continue interactively in a terminal","열기":"Open","👁 미리보기":"👁 Preview","Fork":"Fork","삭제":"Delete","■ 종료":"■ Stop","💬 대화":"💬 Chat",
 "📌 고정":"📌 Pin","📌 고정됨":"📌 Pinned","상단 고정":"Pin to top","상단 고정 해제":"Unpin from top",
 "폴더 없음 — ＋로 추가":"No folders — add with ＋","📌 추가됨":"📌 added","더보기":"Show more","접기":"Show less",
 "이 폴더 세션 전체 삭제":"Delete all sessions in this folder","목록에서 제거(핀 해제)":"Remove from list (unpin)","머신 제거":"Remove machine",
@@ -604,15 +606,14 @@ function newSession(mid,cwd){ AG={mid,cwd}; modelOpts(document.getElementById("a
 function agGo(kind){
   $("#agpick").classList.remove("show"); if(!AG) return;
   if(kind==="claude") launchIn(AG.mid,AG.cwd);
-  else openTerm(AG.mid,AG.cwd,null,(document.getElementById("ag-cxmodel")||{}).value||"");
+  else newCodexSession(AG.mid,AG.cwd,(document.getElementById("ag-cxmodel")||{}).value||"");
 }
-async function newCodexSession(mid,cwd){
-  const cxm=(document.getElementById("ag-cxmodel")||{}).value||"";
-  const first=prompt(t("🟢 새 Codex 세션 — 첫 메시지:")); if(!first) return;
-  toast(t("Codex 세션 생성 중… (응답까지 잠시)"));
+async function newCodexSession(mid,cwd,model){
+  const first=await uiPrompt(t("🟢 새 Codex 세션 — 첫 메시지:")); if(!first) return;
+  toast(t("Codex 세션 생성 중… (앱에도 뜹니다)"));
   try{
     const r=await apiM(mid,"run",{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({agent:"codex",cwd,prompt:first,model:cxm||undefined})});
+      body:JSON.stringify({agent:"codex",cwd,prompt:first,model:model||undefined})});
     if(!r.ok){ toast(t("실패: ")+(r.error||"unknown")); return; }
     toast(t("Codex 세션 생성됨")); openFolder(mid,cwd);
     preview(mid,cwd,r.sessionId,"codex");

@@ -151,6 +151,103 @@ def list_folders() -> list[dict]:
     return list(by_cwd.values())
 
 
+def list_projects() -> list[str]:
+    """Folders codex knows as projects (config.toml [projects] sections).
+
+    These are the folders the Codex desktop app shows as projects, so a session
+    created in one of them appears in the app under that project."""
+    import re
+    cfg = codex_home() / "config.toml"
+    out: list[str] = []
+    if cfg.exists():
+        try:
+            txt = cfg.read_text(encoding="utf-8")
+        except OSError:
+            return out
+        for m in re.finditer(r'^\[projects\.(?:"([^"]+)"|\'([^\']+)\'|([^\]"\']+))\]', txt, re.M):
+            p = m.group(1) or m.group(2) or m.group(3)
+            if p and os.path.isdir(os.path.expanduser(p)):
+                out.append(p)
+    return out
+
+
+def _appserver_session(cwd: str, prompt: str, model: str = "",
+                       resume_id: str = "", timeout: int = 240) -> dict:
+    """Create/continue a codex session through the app-server (thread/start +
+    turn/start). Sessions made this way get source=vscode and show up in the
+    Codex desktop app's list — unlike `codex exec` (source=exec, filtered out).
+    Returns {ok, sessionId, response}."""
+    import threading
+    import time as _t
+    cx = codex_path()
+    if not cx:
+        return {"ok": False, "error": "codex CLI not installed on this machine"}
+    p = subprocess.Popen([cx, "app-server"], stdin=subprocess.PIPE,
+                         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                         text=True, bufsize=1)
+    out: list[str] = []
+    threading.Thread(target=lambda: [out.append(l) for l in p.stdout], daemon=True).start()
+
+    def send(o):
+        p.stdin.write(json.dumps(o) + "\n")
+        p.stdin.flush()
+
+    def wait(rid, t):
+        t0 = _t.time()
+        while _t.time() - t0 < t:
+            for l in list(out):
+                try:
+                    o = json.loads(l)
+                except Exception:
+                    continue
+                if o.get("id") == rid:
+                    return o
+            _t.sleep(0.1)
+        return None
+
+    try:
+        send({"id": 1, "method": "initialize",
+              "params": {"clientInfo": {"name": "asm", "version": "1"}}})
+        if not wait(1, 15):
+            return {"ok": False, "error": "app-server initialize timeout"}
+        send({"method": "initialized", "params": {}})
+        if resume_id:
+            send({"id": 2, "method": "thread/resume", "params": {"threadId": resume_id}})
+        else:
+            send({"id": 2, "method": "thread/start", "params": {"cwd": cwd}})
+        r = wait(2, 20)
+        if not r or "result" not in r:
+            return {"ok": False, "error": "thread start/resume failed: " + json.dumps(r or {})[:160]}
+        tid = r["result"]["thread"]["id"]
+        tp = {"threadId": tid, "input": [{"type": "text", "text": prompt}]}
+        if model:
+            tp["model"] = model
+        send({"id": 3, "method": "turn/start", "params": tp})
+        wait(3, timeout)
+        # Poll the rollout until the assistant reply lands — the turn response
+        # arrives before the rollout/preview is flushed, and a session without a
+        # preview is hidden from the app's thread/list. Keep the app-server alive
+        # (don't terminate) until the reply is persisted.
+        reply = ""
+        for _ in range(10):
+            _t.sleep(1.0)
+            tx = transcript(tid)
+            for m in reversed(tx.get("messages") or []):
+                if m.get("role") == "assistant" and (m.get("text") or "").strip():
+                    reply = m["text"]
+                    break
+            if reply:
+                break
+        return {"ok": True, "sessionId": tid, "response": reply or "(응답 생성 중 — 잠시 후 새로고침)"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    finally:
+        try:
+            p.terminate()
+        except Exception:
+            pass
+
+
 def transcript(session_id: str) -> dict:
     for f in _all_rollouts():
         if session_id not in f.name:
@@ -190,59 +287,26 @@ def delete(session_id: str) -> dict:
 
 
 def run(body: dict) -> dict:
-    """Start or resume a codex session non-interactively and return the reply.
+    """Start or resume a codex session via the app-server and return the reply.
 
-    body: {cwd, prompt, resumeId?, images?: [paths], timeoutSec?}
-    Returns {ok, sessionId, response} (response = last agent message).
+    Uses the app-server (thread/start + turn/start) instead of `codex exec`, so
+    the session is source=vscode and appears in the Codex desktop app's list
+    (codex exec sessions are source=exec and filtered out by the app).
+
+    body: {cwd, prompt, resumeId?, model?, timeoutSec?}
+    Returns {ok, sessionId, response}.
     """
-    cx = codex_path()
-    if not cx:
-        return {"ok": False, "error": "codex CLI not installed on this machine"}
     cwd = os.path.realpath(os.path.expanduser(body.get("cwd", "") or "~"))
     prompt = (body.get("prompt") or "").strip()
-    if not os.path.isdir(cwd):
+    if not body.get("resumeId") and not os.path.isdir(cwd):
         return {"ok": False, "error": f"folder not found: {cwd}"}
     if not prompt:
         return {"ok": False, "error": "prompt required"}
-    resume_id = body.get("resumeId") or ""
-    timeout = int(body.get("timeoutSec") or 240)
-
-    argv = [cx, "exec", "--json", "--skip-git-repo-check", "-s", "read-only"]
-    if (body.get("model") or "").strip():
-        argv += ["-m", body["model"].strip()]
-    if resume_id:
-        argv += ["resume", resume_id]   # -i after `resume` attaches to the resumed turn
-    for img in body.get("images") or []:
-        argv += ["-i", img]
-    if body.get("images"):
-        argv.append("--")  # stop -i <FILE>... from swallowing the prompt
-    argv.append(prompt)
-    try:
-        r = subprocess.run(argv, cwd=cwd, stdin=subprocess.DEVNULL,
-                           capture_output=True, timeout=timeout)
-    except subprocess.TimeoutExpired:
-        return {"ok": False, "error": "codex timed out", "sessionId": resume_id or None}
-    except OSError as e:
-        return {"ok": False, "error": str(e)}
-
-    out = r.stdout.decode("utf-8", "replace")
-    sid = resume_id or None
-    answer = None
-    for line in out.splitlines():
-        line = line.strip()
-        if not line.startswith("{"):
-            continue
-        try:
-            ev = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if not sid and ev.get("type") == "thread.started" and ev.get("thread_id"):
-            sid = ev["thread_id"]
-        if ev.get("type") == "item.completed":
-            item = ev.get("item") or {}
-            if item.get("type") == "agent_message" and item.get("text"):
-                answer = item["text"]
-    if not sid:
-        err = r.stderr.decode("utf-8", "replace")[-400:]
-        return {"ok": False, "error": "codex gave no session id", "raw": (out[-400:] + err)}
-    return {"ok": True, "sessionId": sid, "agent": "codex", "response": answer or "(no reply)"}
+    r = _appserver_session(
+        cwd, prompt,
+        model=(body.get("model") or "").strip(),
+        resume_id=body.get("resumeId") or "",
+        timeout=int(body.get("timeoutSec") or 240),
+    )
+    r.setdefault("agent", "codex")
+    return r
