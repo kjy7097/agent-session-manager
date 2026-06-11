@@ -83,6 +83,7 @@ def build_registry(cfg: dict) -> list[dict]:
         machines.append({
             "id": m["id"], "name": m.get("name", m["id"]), "os": m.get("os", "linux"),
             "host": m.get("host"), "online": True, "is_self": False, "agentReady": True,
+            "sshUser": m.get("sshUser") or "", "sshPort": int(m.get("sshPort") or 22),
             "baseUrl": f"http://127.0.0.1:{m['localPort']}",
         })
     return machines

@@ -177,6 +177,7 @@
              onkeydown="if(event.key==='Enter')txSend()"
              onpaste="for(const it of (event.clipboardData||{}).items||[]){if(it.type.startsWith('image/')){attachImage(it.getAsFile());event.preventDefault();}}">
       <button class="primary" onclick="txSend()" data-i18n="보내기">보내기</button>
+      <button class="ghost" onclick="copyTermCmd(TX.mid,TX.cwd,TX.sessionId)" title="터미널에서 인터랙티브로 이어가기 (SSH)">⌨</button>
       <button class="ghost" onclick="handoff('claude')" data-i18n="🟧 Claude로 전환" title="이 대화를 Claude 새 세션으로 이어갑니다">🟧 Claude로 전환</button>
       <button onclick="closeTx()" data-i18n="닫기">닫기</button></div>
   </div>
@@ -188,6 +189,11 @@
     <div style="padding:14px 18px 0;display:flex;align-items:center;gap:8px">
       <span style="font-size:12px;color:var(--muted)" data-i18n="모델 (Claude)">모델 (Claude)</span>
       <select id="ag-model" style="flex:1;background:var(--panel);color:var(--fg);border:1px solid var(--border);border-radius:6px;padding:7px"></select>
+    </div>
+    <div style="padding:8px 18px 0;display:flex;align-items:center;gap:8px">
+      <span style="font-size:12px;color:var(--muted)" data-i18n="모델 (Codex)">모델 (Codex)</span>
+      <input id="ag-cxmodel" list="cx-models" placeholder="기본값 (config.toml)" data-i18n-ph="기본값 (config.toml)" style="flex:1;background:var(--panel);color:var(--fg);border:1px solid var(--border);border-radius:6px;padding:7px">
+      <datalist id="cx-models"><option value="gpt-5.4-mini"><option value="gpt-5.4-codex"><option value="gpt-5.4"></datalist>
     </div>
     <div style="padding:18px;display:flex;gap:10px">
       <button class="primary" style="flex:1;padding:14px" onclick="agGo('claude')">🟧 Claude</button>
@@ -270,6 +276,10 @@ const EN={
 "이미지 업로드 중…":"Uploading image…","업로드 실패: ":"Upload failed: ","이미지 첨부됨":"Image attached",
 "(이미지)":"(image)","첨부한 이미지를 봐줘":"Please look at the attached image",
 "🧑 나":"🧑 You",
+"터미널":"Terminal","모델 (Codex)":"Model (Codex)","기본값 (config.toml)":"default (config.toml)",
+"터미널에서 인터랙티브로 이어가기 (SSH)":"Continue interactively in your terminal (SSH)",
+"복사됨! 터미널에 붙여넣으세요:":"Copied! Paste into your terminal:",
+"아래 명령을 복사해 터미널에서 실행:":"Copy this command and run it in your terminal:",
 "모델 (Claude)":"Model (Claude)","기본값":"Default","모델: 머신 설정":"Model: machine default",
 "기본 모델 저장됨: ":"Default model saved: ","머신 설정":"machine default",
 "🟢 Codex로 전환":"🟢 Switch to Codex","🟧 Claude로 전환":"🟧 Switch to Claude",
@@ -344,6 +354,22 @@ let MACHINES=[], FOLDER=null, FOLDER_MACHINE=null, PK_MID=null, PK_PATH=null, TX
 const mById = id => MACHINES.find(m=>m.id===id)||{};
 const osIcon = os => os==="windows"?"🖥️":os==="macos"?"🍎":os==="linux"?"🐧":"💻";
 const shortModel = m => (m||"").replace(/^claude-/,"").replace(/-\d{8}$/,"");
+function termCmd(m,cwd,sid){
+  const r=sid?`codex resume ${sid}`:"codex";
+  if(m.is_self) return `cd "${cwd}" && ${r}`;
+  const port=(m.sshPort&&m.sshPort!==22)?` -p ${m.sshPort}`:"";
+  if(m.os==="windows") return `ssh -t${port} ${m.sshUser}@${m.host} "cd /d \"${cwd}\" && ${r}"`;
+  return `ssh -tt${port} ${m.sshUser}@${m.host} 'bash -lc "cd \"${cwd}\" && exec ${r}"'`;
+}
+async function copyTermCmd(mid,cwd,sid){
+  const m=mById(mid); if(!m) return;
+  const cmd=termCmd(m,cwd,sid);
+  let copied=false;
+  try{ await navigator.clipboard.writeText(cmd); copied=true; }catch(e){
+    try{ const ta=document.createElement("textarea"); ta.value=cmd; document.body.appendChild(ta); ta.select(); copied=document.execCommand("copy"); ta.remove(); }catch(e2){}
+  }
+  prompt(copied?t("복사됨! 터미널에 붙여넣으세요:"):t("아래 명령을 복사해 터미널에서 실행:"),cmd);
+}
 const cssid = id => id.replace(/[^a-zA-Z0-9_-]/g,"_");
 const fkey = (mid,cwd)=>mid+""+cwd;
 const isMobile = ()=>window.matchMedia("(max-width:760px)").matches;
@@ -477,6 +503,7 @@ async function loadSessionList(mid,cwd,query){
         <div class="sub">${s.msg_count}${t("개 메시지")} · ${when} · <code>${s.session_id.slice(0,8)}</code></div>${snip}
         <div class="actions">
           <button class="primary" onclick='preview(${mj},${cj},${sj},"codex")'>${t("💬 대화")}</button>
+          <button onclick='copyTermCmd(${mj},${cj},${sj})' title="${t("터미널에서 인터랙티브로 이어가기 (SSH)")}">⌨ ${t("터미널")}</button>
           ${pinBtn}<button class="ghost danger" onclick='del(${mj},${cj},${sj},false,"codex")'>${t("삭제")}</button></div></div>`;
     }
     return `<div class="session"><div class="row1"><span class="title">${s._top?"📌 ":""}${esc(s.title)}</span>${badges}</div>
@@ -574,11 +601,12 @@ function agGo(kind){
   if(kind==="claude") launchIn(AG.mid,AG.cwd); else newCodexSession(AG.mid,AG.cwd);
 }
 async function newCodexSession(mid,cwd){
+  const cxm=(document.getElementById("ag-cxmodel")||{}).value||"";
   const first=prompt(t("🟢 새 Codex 세션 — 첫 메시지:")); if(!first) return;
   toast(t("Codex 세션 생성 중… (응답까지 잠시)"));
   try{
     const r=await apiM(mid,"run",{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({agent:"codex",cwd,prompt:first})});
+      body:JSON.stringify({agent:"codex",cwd,prompt:first,model:cxm||undefined})});
     if(!r.ok){ toast(t("실패: ")+(r.error||"unknown")); return; }
     toast(t("Codex 세션 생성됨")); openFolder(mid,cwd);
     preview(mid,cwd,r.sessionId,"codex");
