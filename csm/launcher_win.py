@@ -77,10 +77,17 @@ def main() -> int:
     t.start()
 
     # inject the prompt once the session is ready (interactive, no claude -p)
+    start = time.time()
     while not prompt_sent[0]:
+        # fallback: assume ready ~8s after start if no READY marker was seen
+        if ready_at[0] is None and time.time() - start > 8:
+            ready_at[0] = time.time()
         if ready_at[0] and time.time() - ready_at[0] > 4:
             try:
-                proc.write(prompt + "\r")
+                # bracketed paste so the seed's newlines don't submit line-by-line
+                proc.write("\x1b[200~" + prompt + "\x1b[201~")
+                time.sleep(0.5)
+                proc.write("\r")
             except Exception:
                 pass
             prompt_sent[0] = True

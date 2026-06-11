@@ -92,10 +92,20 @@ def main() -> int:
             if ready_at is None and any(n in norm for n in READY_NEEDLES):
                 ready_at = time.monotonic()
             buf = buf[-8192:]  # bound memory over a long session
-        # inject the prompt a few seconds after the session is ready
+        # fallback: if we never saw a READY marker (claude may emit little on the
+        # PTY), assume ready ~8s after start so the seed still gets injected.
+        if not prompt_sent and ready_at is None and time.monotonic() - start > 8:
+            ready_at = time.monotonic()
+        # inject the prompt a few seconds after the session is ready. Wrap it in
+        # a bracketed paste so the seed's newlines don't each submit as Enter.
         if not prompt_sent and ready_at and time.monotonic() - ready_at > 4:
             try:
-                os.write(fd, prompt.encode() + b"\r")
+                data = b"\x1b[200~" + prompt.encode() + b"\x1b[201~"
+                for i in range(0, len(data), 1024):   # chunk to avoid PTY limits
+                    os.write(fd, data[i:i + 1024])
+                    time.sleep(0.02)
+                time.sleep(0.5)
+                os.write(fd, b"\r")
             except OSError:
                 pass
             prompt_sent = True
