@@ -117,9 +117,15 @@ class Agent:
             return {"ok": False, "error": "cmd required"}
         try:
             if IS_WIN:
-                # AtLogon scheduled-task agent runs in the user session, so a new
-                # console window is visible on the desktop.
-                subprocess.Popen(["cmd", "/c", "start", "Codex", "cmd", "/k", cmd])
+                # Write the command to a .bat and launch it in a new console, so
+                # quoting in `cmd` (ssh -t "...") survives. AtLogon scheduled-task
+                # agent runs in the user session, so the window is visible.
+                import tempfile
+                bat = tempfile.NamedTemporaryFile("w", suffix=".bat", prefix="csm-codex-",
+                                                  delete=False, encoding="utf-8")
+                bat.write("@echo off\r\n" + cmd + "\r\n")
+                bat.close()
+                subprocess.Popen(["cmd", "/c", "start", "Codex", "cmd", "/k", bat.name])
             elif sys.platform == "darwin":
                 import tempfile
                 f = tempfile.NamedTemporaryFile("w", suffix=".command", prefix="csm-codex-",
