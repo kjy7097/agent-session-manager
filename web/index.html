@@ -705,6 +705,17 @@ async function loadCodexProjects(mid){
 }
 function pkGo(path){ addAndOpen(PK_MID,path); }   // 칩 클릭 = 그 codex 프로젝트 폴더를 바로 추가
 function closePicker(){ $("#picker").classList.remove("show"); }
+async function pkMkdir(){
+  if(!PK_PATH) return;
+  const name=await uiPrompt(t("새 폴더 이름")+`\n${PK_PATH}`,"");
+  if(name===null) return;            // 취소
+  if(!name.trim()) return;
+  try{
+    const d=await apiM(PK_MID,"mkdir",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({parent:PK_PATH,name:name.trim()})});
+    if(d&&d.error){ toast(t("실패: ")+d.error); return; }
+    toast(t("폴더 생성됨")); await pkNav((d&&d.path)||PK_PATH);   // 새 폴더 안으로 이동
+  }catch(e){ toast(t("오류: ")+e.message); }
+}
 async function pkNav(path){
   $("#pk-list").innerHTML=`<div class="empty">${t("불러오는 중…")}</div>`;
   let d; try{ d=await apiM(PK_MID,`browse${path?`?path=${encodeURIComponent(path)}`:""}`); }
@@ -727,7 +738,8 @@ async function pkNav(path){
     crumbHtml=segs.map((s,i)=>`<a href="#" style="color:var(--accent2)" onclick='pkNav(${JSON.stringify(s.path)});return false'>${esc(s.label)}</a>`).join(`<span style="opacity:.5">${esc(sep)}</span>`);
   } else { crumbHtml=`<code>${esc(d.path)}</code>`; }
   $("#pk-crumbs").innerHTML=`<button class="ghost" onclick='pkNav(${d.parent?JSON.stringify(d.parent):"null"})' ${d.parent?"":"disabled"}>${t("⬆ 상위")}</button>
-    <button class="ghost" onclick='pkNav(${JSON.stringify(d.home)})'>${t("🏠 홈")}</button>${crumbHtml}`;
+    <button class="ghost" onclick='pkNav(${JSON.stringify(d.home)})'>${t("🏠 홈")}</button>
+    <button class="ghost" onclick="pkMkdir()" ${d.path&&!d.path.startsWith("내 PC")?"":"disabled"} title="${t("이 폴더 안에 새 폴더 만들기")}">${t("📁＋ 새 폴더")}</button>${crumbHtml}`;
   // drive side list (Windows targets)
   const dv=$("#pk-drives"), drv=d.drives||[];
   if(drv.length){

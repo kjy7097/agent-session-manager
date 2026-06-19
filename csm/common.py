@@ -396,6 +396,35 @@ def browse_dir(path: str | None = None) -> dict:
     }
 
 
+def make_dir(parent: str | None, name: str) -> dict:
+    """Create a new subfolder `name` under `parent` (default: home) and return a
+    fresh browse_dir() of the newly-created folder so the picker lands inside it.
+
+    `name` may contain nested segments (a/b/c) but is constrained to stay under
+    `parent` — absolute paths and `..` escapes are rejected."""
+    base = _realpath(parent) if parent else str(Path.home())
+    if not os.path.isdir(base):
+        return {"error": "상위 폴더가 존재하지 않습니다", "parent": parent}
+    name = (name or "").strip().strip("/\\")
+    if not name:
+        return {"error": "폴더 이름을 입력하세요"}
+    if os.path.isabs(name) or (os.name == "nt" and os.path.splitdrive(name)[0]):
+        return {"error": "폴더 이름에 절대경로는 쓸 수 없습니다"}
+    target = os.path.normpath(os.path.join(base, name))
+    # confine to base: target must be base or a descendant of it
+    if target != base and not target.startswith(base + os.sep):
+        return {"error": "상위 폴더 밖으로 나갈 수 없습니다"}
+    if os.path.exists(target):
+        if os.path.isdir(target):
+            return browse_dir(target)   # already there — just navigate into it
+        return {"error": "같은 이름의 파일이 이미 있습니다"}
+    try:
+        os.makedirs(target, exist_ok=True)
+    except OSError as ex:
+        return {"error": f"폴더 생성 실패: {ex}"}
+    return browse_dir(target)
+
+
 def search_sessions(cwd: str, query: str) -> list[dict]:
     """Search sessions within a folder by title, first prompt, AND conversation
     content. Returns matching rows (same shape as list_sessions_for_cwd) plus a

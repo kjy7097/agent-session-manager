@@ -90,6 +90,9 @@ class Agent:
     def browse(self, path: str | None) -> dict:
         return common.browse_dir(path)
 
+    def mkdir(self, body: dict) -> dict:
+        return common.make_dir(body.get("parent"), body.get("name") or "")
+
     def upload(self, body: dict) -> dict:
         """Save a base64 image to ~/.csm-uploads and return its path — used to
         attach images to codex runs (codex exec -i <path>)."""
@@ -474,6 +477,8 @@ def _make_handler(agent: Agent):
                 if b.get("agent") == "codex":
                     return self._send(codex.run(b))
                 return self._send({"error": "only agent='codex' runs are supported"}, 400)
+            if u.path == "/mkdir":
+                return self._send(agent.mkdir(body or {}))
             if u.path == "/upload":
                 return self._send(agent.upload(body or {}))
             if u.path == "/handoff":
