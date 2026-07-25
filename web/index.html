@@ -337,12 +337,12 @@ let DEFMODEL="";
 function modelOpts(sel,cur){
   if(!sel) return;
   const d=t("기본값")+(DEFMODEL?` (${DEFMODEL})`:"");
-  sel.innerHTML=`<option value="">${d}</option><option value="fable">Fable 5</option><option value="opus">Opus 4.8</option><option value="sonnet">Sonnet 4.6</option><option value="haiku">Haiku 4.5</option>`;
+  sel.innerHTML=`<option value="">${d}</option><option value="fable">Fable 5</option><option value="opus">Opus 5</option><option value="sonnet">Sonnet 4.6</option><option value="haiku">Haiku 4.5</option>`;
   sel.value=cur||"";
 }
 function fillModelSelects(){
   const h=document.getElementById("defmodel");
-  if(h){ h.innerHTML=`<option value="">⚙ ${t("모델: 머신 설정")}</option><option value="fable">⚙ Fable 5</option><option value="opus">⚙ Opus 4.8</option><option value="sonnet">⚙ Sonnet 4.6</option><option value="haiku">⚙ Haiku 4.5</option>`; h.value=DEFMODEL; }
+  if(h){ h.innerHTML=`<option value="">⚙ ${t("모델: 머신 설정")}</option><option value="fable">⚙ Fable 5</option><option value="opus">⚙ Opus 5</option><option value="sonnet">⚙ Sonnet 4.6</option><option value="haiku">⚙ Haiku 4.5</option>`; h.value=DEFMODEL; }
   modelOpts(document.getElementById("ag-model"));
   modelOpts(document.getElementById("tx-model"));
 }
