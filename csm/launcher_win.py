@@ -18,8 +18,35 @@ import time
 
 ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
 
+# The picker's highlight marker: plain ">" on a Windows console, ❯ elsewhere.
+POINTERS = ("\u276f", "\u203a", "\u25b6", ">")
+NO_OPT = "no,exit"
+YES_OPT = "yes,itrustthisfolder"
+
+
+def _trust_needs_down(norm):
+    """Newer claude (>= 2.1.25x) highlights "No, exit" first in the trust dialog,
+    so a bare Enter quits. Return True when we must press Down before Enter.
+
+    Checks the character immediately before each option rather than the last
+    pointer on screen: escape-sequence leftovers can strand a stray ">".
+    """
+    i = norm.rfind(NO_OPT)
+    j = norm.rfind(YES_OPT)
+    if i == -1 or j == -1:
+        return False  # not the newer two-option dialog: keep the old bare Enter
+    if i and norm[i - 1] in POINTERS:
+        return True
+    if j and norm[j - 1] in POINTERS:
+        return False
+    return True  # dialog is up but no marker seen: newer claude defaults to "No"
+
 
 def main() -> int:
+    try:  # keep the token log readable whatever the console codepage is
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
     folder = os.path.realpath(os.path.expanduser(sys.argv[1]))
     name = sys.argv[2]
     resume_id = sys.argv[3]
@@ -49,6 +76,7 @@ def main() -> int:
     buf = [""]
     ready_at = [None]
     prompt_sent = [not prompt]
+    logged = [0]  # mirror the first 64KB of console output to the token log
 
     def drain():
         while True:
@@ -61,15 +89,29 @@ def main() -> int:
             if not data:
                 time.sleep(0.1)
                 continue
+            if logged[0] < 65536:
+                try:
+                    sys.stderr.write(data)
+                    sys.stderr.flush()
+                except Exception:
+                    pass
+                logged[0] += len(data)
             buf[0] = (buf[0] + data)[-8000:]
             norm = ANSI.sub("", buf[0]).lower().replace(" ", "").replace("\n", "").replace("\r", "")
             if "trust" in norm and trust_sent[0] < 3 and time.time() - last[0] > 1.5:
                 try:
+                    time.sleep(0.5)  # let the picker finish mounting
+                    if _trust_needs_down(norm):
+                        proc.write("\x1b[B")  # move to "Yes, I trust this folder"
+                        time.sleep(0.5)
                     proc.write("\r")
                 except Exception:
                     pass
                 trust_sent[0] += 1
                 last[0] = time.time()
+                # only retry if claude re-renders the prompt (a 2nd Down would wrap
+                # back to "No, exit" and Enter would quit the session)
+                buf[0] = ""
             if ready_at[0] is None and ("remotecontrol" in norm or "claude.ai/code" in norm):
                 ready_at[0] = time.time()
 

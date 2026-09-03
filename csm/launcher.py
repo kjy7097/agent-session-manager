@@ -25,6 +25,29 @@ import time
 ANSI = re.compile(rb"\x1b\[[0-9;?]*[A-Za-z]")
 TRUST_NEEDLE = b"trustthisfolder"  # normalized (no spaces/newlines, lowercase)
 READY_NEEDLES = (b"remotecontrol", b"claude.ai/code")
+# The picker's highlight marker: ❯ on POSIX, plain ">" on a Windows console.
+POINTERS = ("\u276f", "\u203a", "\u25b6", ">")
+NO_OPT = "no,exit"
+YES_OPT = "yes,itrustthisfolder"
+
+
+def _trust_needs_down(norm: str) -> bool:
+    """Newer claude (>= 2.1.25x) highlights "No, exit" first in the trust dialog,
+    so a bare Enter quits. Return True when we must press Down before Enter.
+
+    `norm` is the screen text lowercased with spaces/newlines stripped. We look at
+    the character immediately before each option rather than the last pointer on
+    screen, because escape-sequence leftovers can strand a stray ">".
+    """
+    i = norm.rfind(NO_OPT)
+    j = norm.rfind(YES_OPT)
+    if i == -1 or j == -1:
+        return False  # not the newer two-option dialog: keep the old bare Enter
+    if i and norm[i - 1] in POINTERS:
+        return True
+    if j and norm[j - 1] in POINTERS:
+        return False
+    return True  # dialog is up but no marker seen: newer claude defaults to "No"
 
 
 def main() -> int:
@@ -64,6 +87,7 @@ def main() -> int:
     start = time.monotonic()
     ready_at = None
     prompt_sent = not prompt  # nothing to send if no prompt
+    logged = 0  # mirror the first 64KB of PTY output to stderr (the token log)
     while True:
         try:
             r, _, _ = select.select([fd], [], [], 1.0)
@@ -76,6 +100,13 @@ def main() -> int:
                 break
             if not data:
                 break  # claude exited
+            if logged < 65536:
+                try:
+                    sys.stderr.buffer.write(data)
+                    sys.stderr.buffer.flush()
+                except (OSError, ValueError):
+                    pass
+                logged += len(data)
             buf += data
             norm = ANSI.sub(b"", buf).lower().replace(b" ", b"").replace(b"\n", b"")
             if (
@@ -84,11 +115,19 @@ def main() -> int:
                 and time.monotonic() - last_trust > 1.5
             ):
                 try:
+                    time.sleep(0.5)  # let the picker finish mounting
+                    if _trust_needs_down(norm.decode("utf-8", "replace")):
+                        os.write(fd, b"\x1b[B")  # move to "Yes, I trust this folder"
+                        time.sleep(0.5)
                     os.write(fd, b"\r")
                 except OSError:
                     pass
                 trust_sent += 1
                 last_trust = time.monotonic()
+                # forget the dialog text we just answered: a retry must only fire
+                # if claude re-renders the prompt (otherwise a 2nd Down wraps back
+                # to "No, exit" and Enter quits the session)
+                buf = b""
             if ready_at is None and any(n in norm for n in READY_NEEDLES):
                 ready_at = time.monotonic()
             buf = buf[-8192:]  # bound memory over a long session
