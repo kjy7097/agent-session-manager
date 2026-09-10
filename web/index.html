@@ -38,6 +38,16 @@
   .nodehead .nm { flex:1; }
   .nodefolders { margin:4px 0 0 10px; padding-left:8px; border-left:1px solid var(--border); }
   .nodefolders:not(.expanded) .folder.hidden { display:none; }
+  /* folder search: reveal collapsed rows, drop non-matches and empty machines */
+  #nodes.searching .nodefolders:not(.expanded) .folder.hidden:not(.nomatch) { display:flex; }
+  #nodes.searching .more { display:none; }
+  #nodes .folder.nomatch, #nodes .nodegrp.nomatch { display:none; }
+  .fsearch { position:relative; margin-bottom:10px; }
+  .fsearch .clear { position:absolute; right:6px; top:50%; transform:translateY(-50%);
+    background:none; border:0; color:var(--muted); cursor:pointer; font-size:15px;
+    line-height:1; padding:4px 6px; display:none; }
+  .fsearch.on .clear { display:block; }
+  .fsearch .searchbox { padding-right:30px; }
   .folder { display:flex; align-items:center; gap:6px; padding:6px 6px 6px 9px; border-radius:6px; cursor:pointer; }
   .folder:hover { background:var(--panel); }
   .folder.active { background:var(--panel); border-left:2px solid var(--accent); }
@@ -131,6 +141,13 @@
       <button class="iconbtn del" onclick="deleteManager()" data-i18n-title="삭제 — 매니저 세션 기록 삭제">🗑</button>
     </div>
     <div class="sec-title" data-i18n="노드 / 폴더">노드 / 폴더</div>
+    <div class="fsearch" id="fsearch">
+      <input class="searchbox" id="fq" spellcheck="false" autocomplete="off"
+             data-i18n-ph="🔎 폴더 검색 (경로)" placeholder="🔎 폴더 검색 (경로)"
+             oninput="filterFolders(this.value)"
+             onkeydown="if(event.key==='Escape'){this.value='';filterFolders('');}">
+      <button class="clear" data-i18n-title="지우기" title="지우기" onclick="document.getElementById('fq').value='';filterFolders('')">✕</button>
+    </div>
     <div id="nodes"></div>
   </div>
   <div class="main" id="main">
@@ -291,7 +308,8 @@ const EN={
 "Codex 세션 생성 중… (앱에도 뜹니다)":"Creating Codex session… (also appears in the app)",
 "Codex 세션 생성됨":"Codex session created","⌨ 터미널":"⌨ Terminal","📋 터미널 명령 복사됨 — 터미널에 붙여넣으세요":"📋 Terminal command copied — paste it into your terminal","아래 명령을 복사해 터미널에서 실행:":"Copy this command and run it in your terminal:","터미널에서 이어가기 (SSH 명령 복사)":"Continue in a terminal (copy SSH command)","터미널에서 인터랙티브로 이어가기":"Continue interactively in a terminal","열기":"Open","👁 미리보기":"👁 Preview","Fork":"Fork","삭제":"Delete","■ 종료":"■ Stop","💬 대화":"💬 Chat",
 "📌 고정":"📌 Pin","📌 고정됨":"📌 Pinned","상단 고정":"Pin to top","상단 고정 해제":"Unpin from top",
-"폴더 없음 — ＋로 추가":"No folders — add with ＋","📌 추가됨":"📌 added","더보기":"Show more","접기":"Show less",
+"폴더 없음 — ＋로 추가":"No folders — add with ＋",
+ "🔎 폴더 검색 (경로)":"🔎 Search folders (path)","지우기":"Clear","📌 추가됨":"📌 added","더보기":"Show more","접기":"Show less",
 "이 폴더 세션 전체 삭제":"Delete all sessions in this folder","목록에서 제거(핀 해제)":"Remove from list (unpin)","머신 제거":"Remove machine",
 "에이전트 없음":"no agent","개":"","　":" ",
 "이 세션을 삭제할까요? 되돌릴 수 없습니다.":"Delete this session? This cannot be undone.",
@@ -494,7 +512,46 @@ async function loadNodeFolders(m){
   const rows=folders.map((f,i)=>row(f,i>=3 && !f.top));
   const more = folders.length>3 ? `<div class="more" data-n="${folders.length-3}" onclick="toggleMore(this)">${t("더보기")} (${folders.length-3})</div>` : "";
   nf.innerHTML=rows.join("")+more;
+  if(FQ) applyFolderFilter();   // folders arrive per machine; keep the active filter
 }
+// Folder search — filters the already-loaded folder rows of every machine at once.
+// Case-insensitive over the full path; a query with spaces requires every term to
+// appear, so "work scout" finds D:\workspace\project_scout.
+let FQ = "";
+function filterFolders(q){
+  FQ = (q || "").trim().toLowerCase();
+  const box = $("#fsearch");
+  if(box) box.classList.toggle("on", !!FQ);
+  $("#nodes").classList.toggle("searching", !!FQ);
+  applyFolderFilter();
+}
+function applyFolderFilter(){
+  const host = $("#nodes");
+  const terms = FQ ? FQ.split(/\s+/).filter(Boolean) : [];
+  let total = 0;
+  for(const grp of host.querySelectorAll(".nodegrp")){
+    let shown = 0;
+    for(const row of grp.querySelectorAll(".folder")){
+      const path = (row.getAttribute("title") || "").toLowerCase();
+      const hit = !terms.length || terms.every(w => path.includes(w));
+      row.classList.toggle("nomatch", !hit);
+      if(hit) shown++;
+    }
+    // while searching, hide machines that contribute nothing
+    grp.classList.toggle("nomatch", terms.length > 0 && shown === 0);
+    total += shown;
+  }
+  let none = $("#fnone");
+  if(terms.length && total === 0){
+    if(!none){
+      none = document.createElement("div");
+      none.id = "fnone"; none.className = "empty sm";
+      host.appendChild(none);
+    }
+    none.textContent = t("검색 결과 없음");
+  } else if(none){ none.remove(); }
+}
+
 function toggleMore(btn){ const nf=btn.parentNode; const ex=nf.classList.toggle("expanded"); btn.textContent= ex?t("접기"):(t("더보기")+" ("+btn.dataset.n+")"); }
 
 async function openFolder(mid,cwd){
