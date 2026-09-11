@@ -236,6 +236,10 @@ class Agent:
     def search(self, cwd: str, q: str) -> dict:
         return {"sessions": common.search_sessions(cwd, q)}
 
+    def search_all(self, q: str, limit: int = 60) -> dict:
+        """Every Claude session on this machine, not just one folder."""
+        return common.search_all_sessions(q, limit=limit)
+
     def skills_list(self) -> dict:
         return {"skills": skills.list_skills(common.skills_dir())}
 
@@ -457,6 +461,15 @@ def _make_handler(agent: Agent):
                 if not cwd:
                     return self._send({"error": "cwd required"}, 400)
                 return self._send(agent.search(cwd, (q.get("q") or [""])[0]))
+            if u.path == "/search-all":
+                term = (q.get("q") or [""])[0]
+                if not term.strip():
+                    return self._send({"error": "q required"}, 400)
+                try:
+                    lim = max(1, min(200, int((q.get("limit") or ["60"])[0])))
+                except ValueError:
+                    lim = 60
+                return self._send(agent.search_all(term, lim))
             if u.path == "/skills":
                 return self._send(agent.skills_list())
             if u.path == "/skills/pull":

@@ -77,12 +77,17 @@ def _iso(ms_or_str):
     return ms_or_str
 
 
-def parse_session(path: Path) -> dict:
+def parse_session(path: Path, find: str = "") -> dict:
     """Single-pass parse of one session jsonl into a picker row.
 
     Returns keys: session_id, cwd, title, first_prompt, last_activity (epoch
     seconds), msg_count, git_branch, is_remote_control, bridge_session_id.
+
+    `find` (already lowercased) also collects a `snippet` showing where the term
+    occurs. It rides along on this pass on purpose: search would otherwise read
+    every matched transcript twice, and these files reach 100MB.
     """
+    finds = _str_needles(find) if find else ()
     session_id = path.stem
     cwd = None
     ai_title = None
@@ -93,6 +98,8 @@ def parse_session(path: Path) -> dict:
     msg_count = 0
     last_ts = 0.0
     model = None
+    snippet = None
+    scanned = 0
 
     try:
         with path.open(encoding="utf-8", errors="replace") as fh:
@@ -104,6 +111,12 @@ def parse_session(path: Path) -> dict:
                     obj = json.loads(line)
                 except json.JSONDecodeError:
                     continue
+
+                if finds and snippet is None and scanned <= SNIPPET_BYTE_CAP:
+                    scanned += len(line)
+                    low = line.lower()
+                    if any(n in low for n in finds):
+                        snippet = _record_snippet(obj, find)
 
                 t = obj.get("type")
                 if cwd is None and obj.get("cwd"):
@@ -150,6 +163,7 @@ def parse_session(path: Path) -> dict:
         "cwd": cwd,
         "title": title,
         "first_prompt": first_prompt or "",
+        "snippet": snippet or "",
         "last_activity": last_activity,
         "msg_count": msg_count,
         "git_branch": git_branch or "",
@@ -443,6 +457,104 @@ def search_sessions(cwd: str, query: str) -> list[dict]:
     return out
 
 
+def search_all_sessions(query: str, limit: int = 60,
+                        budget_s: float = 12.0) -> dict:
+    """Search every Claude session on this machine, not just one folder.
+
+    The whole conversation lives in the session's jsonl — title, first prompt and
+    every message — so one raw byte scan per file decides whether it can possibly
+    match. Only files that hit get the expensive JSON parse. Files are visited
+    newest-first, so a truncated run still returns the most recent matches.
+
+    Returns {sessions, truncated, scanned, matched}. `truncated` means the result
+    cap or the time budget stopped the walk, not that nothing else matches.
+    """
+    q = (query or "").strip()
+    if not q:
+        return {"sessions": [], "truncated": False, "scanned": 0, "matched": 0}
+    needles = _needles(q)
+    lowq = q.lower()
+
+    files = []
+    pdir = projects_dir()
+    if pdir.is_dir():
+        for d in pdir.iterdir():
+            if not d.is_dir():
+                continue
+            for f in d.glob("*.jsonl"):
+                try:
+                    files.append((f.stat().st_mtime, f))
+                except OSError:
+                    continue
+    files.sort(key=lambda t: t[0], reverse=True)   # newest first
+
+    live = {s["session_id"]: s for s in live_sessions() if s.get("session_id")}
+    names = session_names()
+    deadline = time.monotonic() + budget_s
+    out, scanned, truncated = [], 0, False
+
+    for _mtime, f in files:
+        if len(out) >= limit or time.monotonic() > deadline:
+            truncated = True
+            break
+        scanned += 1
+        if not _file_has(f, needles):
+            continue
+        row = parse_session(f, find=lowq)
+        ls = live.get(row["session_id"])
+        row["is_live"] = ls is not None
+        if ls and ls.get("bridge_session_id"):
+            row["bridge_url"] = bridge_url(ls["bridge_session_id"])
+        elif row.get("bridge_session_id"):
+            row["bridge_url"] = bridge_url(row["bridge_session_id"])
+        else:
+            row["bridge_url"] = None
+        if names.get(row["session_id"]):
+            row["title"] = names[row["session_id"]]
+        row["agent"] = "claude"
+        if not row["snippet"]:   # matched only in the title we just built
+            for field in (row.get("title"), row.get("first_prompt")):
+                if field and lowq in field.lower():
+                    row["snippet"] = _snip(field, lowq)
+                    break
+        out.append(row)
+
+    out.sort(key=lambda r: r.get("last_activity") or 0, reverse=True)
+    return {"sessions": out, "truncated": truncated,
+            "scanned": scanned, "matched": len(out)}
+
+
+def _needles(q: str) -> list[bytes]:
+    r"""Byte patterns to look for. A jsonl mixes raw UTF-8 with \uXXXX escapes
+    (both appear in the same file), so non-ASCII queries need both forms."""
+    lowq = q.lower()
+    out = [lowq.encode("utf-8")]
+    if any(ord(c) > 127 for c in q):
+        esc = "".join("\\u%04x" % ord(c) for c in lowq)
+        out.append(esc.encode("ascii"))
+    return out
+
+
+def _file_has(path: Path, needles: list[bytes], chunk: int = 1 << 20) -> bool:
+    """Case-insensitive byte scan. bytes.lower() only folds ASCII, which is
+    exactly right: Hangul and other scripts here have no case to fold."""
+    longest = max(len(n) for n in needles)
+    try:
+        with path.open("rb") as fh:
+            tail = b""
+            while True:
+                buf = fh.read(chunk)
+                if not buf:
+                    return False
+                window = (tail + buf).lower()
+                for n in needles:
+                    if n in window:
+                        return True
+                tail = buf[-(longest - 1):] if longest > 1 else b""
+    except OSError:
+        return False
+
+
 def _match_snippet(row: dict, q: str) -> str | None:
     for field in (row.get("title"), row.get("first_prompt")):
         if field and q in field.lower():
@@ -467,6 +579,50 @@ def _match_snippet(row: dict, q: str) -> str | None:
     except OSError:
         pass
     return None
+
+
+# A matched session gets at most this many bytes read while looking for
+# something to show. Transcripts here reach 100MB+, and the hit is almost always
+# early; without a cap one giant file would eat the whole search budget.
+SNIPPET_BYTE_CAP = 24 << 20
+
+
+def _str_needles(q: str) -> tuple:
+    r"""Forms of the term as they appear in a jsonl text line: the term itself,
+    plus its \uXXXX escape, since a file mixes both."""
+    out = [q]
+    if any(ord(c) > 127 for c in q):
+        out.append("".join("\\u%04x" % ord(c) for c in q))
+    return tuple(out)
+
+
+def _record_snippet(obj: dict, q: str) -> str | None:
+    """Where the term shows up in one record. Prefers the conversation, then
+    falls back to any text in it — a tool result, a path, a command — because
+    the scan that picked this file looks at those too."""
+    if obj.get("type") in ("user", "assistant") and not obj.get("isMeta"):
+        txt = _text((obj.get("message") or {}).get("content"))
+        if txt and q in txt.lower():
+            return _snip(txt, q)
+    for txt in _walk_strings(obj):
+        if q in txt.lower():
+            return _snip(txt, q)
+    return None
+
+
+def _walk_strings(obj, depth: int = 0):
+    """Every string in a decoded record, longest-lived containers first. Bounded
+    so one pathological record can't stall the search."""
+    if depth > 8:
+        return
+    if isinstance(obj, str):
+        yield obj
+    elif isinstance(obj, dict):
+        for v in obj.values():
+            yield from _walk_strings(v, depth + 1)
+    elif isinstance(obj, list):
+        for v in obj[:200]:
+            yield from _walk_strings(v, depth + 1)
 
 
 def _snip(text: str, q: str, width: int = 140) -> str:
