@@ -141,6 +141,10 @@ def _make_handler(cfg: dict):
                     ui["lang"] = b["lang"]
                 if "defaultModel" in b:
                     ui["defaultModel"] = str(b["defaultModel"] or "")[:40]
+                if "defaultEffort" in b:
+                    v = str(b["defaultEffort"] or "")
+                    if v in ("", "low", "medium", "high", "xhigh", "max"):
+                        ui["defaultEffort"] = v
                 self._save_cfg(cfg)
                 return self._json({"ok": True, "ui": ui})
             if p == "/api/terminal":

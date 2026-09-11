@@ -7,7 +7,8 @@ drains output until Claude exits. The agent does NOT read anything back from
 here — it discovers the resulting session by polling ~/.claude/sessions/*.json.
 
 Usage:
-    python launcher.py <folder> <name> <resume_id|''> <0|1 fork> <claude_path> [prompt]
+    python launcher.py <folder> <name> <resume_id|''> <0|1 fork> <claude_path>
+                       [prompt] [model] [effort]
 
 If [prompt] is given, it is typed into the session (PTY stdin) once the session
 is ready — interactive, no `claude -p`. The session stays alive afterward.
@@ -58,6 +59,7 @@ def main() -> int:
     claude_path = sys.argv[5]
     prompt = sys.argv[6] if len(sys.argv) > 6 else ""
     model = sys.argv[7] if len(sys.argv) > 7 else ""
+    effort = sys.argv[8] if len(sys.argv) > 8 else ""
 
     folder = os.path.realpath(os.path.expanduser(folder))
     if not os.path.isdir(folder):
@@ -67,6 +69,8 @@ def main() -> int:
     argv = ["claude", "--remote-control", name]
     if model:
         argv += ["--model", model]
+    if effort:
+        argv += ["--effort", effort]
     if resume_id:
         argv += ["-r", resume_id]
         if fork:

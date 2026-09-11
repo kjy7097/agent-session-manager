@@ -262,10 +262,15 @@ class Agent:
         argv = [LAUNCH_EXE, str(LAUNCHER), cwd, name, resume_id, fork, self.claude_path]
         prompt = (body.get("prompt") or "").strip()   # optional seed (rewind / handoff)
         model = (body.get("model") or "").strip()     # optional claude --model override
-        if prompt or model:
-            argv.append(prompt)
-        if model:
-            argv.append(model)
+        effort = (body.get("effort") or "").strip()   # optional claude --effort override
+        if effort not in ("", "low", "medium", "high", "xhigh", "max"):
+            effort = ""
+        # positional tail: prompt, model, effort. Trim from the right so an
+        # unset middle value still lines up with the launcher's argv indexes.
+        tail = [prompt, model, effort]
+        while tail and not tail[-1]:
+            tail.pop()
+        argv += tail
         kw = dict(stdin=subprocess.DEVNULL, stdout=logf, stderr=subprocess.STDOUT, close_fds=True)
         if IS_WIN:
             # detach so the session outlives the agent/SSH session

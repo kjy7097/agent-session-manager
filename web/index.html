@@ -131,6 +131,7 @@
   <span class="sp"></span>
   <button class="ghost" onclick="openAddMachine()" data-i18n="＋ 머신">＋ 머신</button>
   <select id="defmodel" class="ghost" onchange="saveDefModel(this.value)" title="기본 모델 (새 세션·이어가기에 적용)" style="background:var(--panel);color:var(--fg);border:1px solid var(--border);border-radius:6px;padding:6px 6px;font-size:12px;max-width:110px"></select>
+  <select id="defeffort" class="ghost" onchange="setDefaultEffort(this.value)" title="기본 노력 (새 세션·이어가기에 적용)" style="background:var(--panel);color:var(--fg);border:1px solid var(--border);border-radius:6px;padding:6px 6px;font-size:12px;max-width:110px"></select>
   <button class="ghost" id="langbtn" onclick="setLang(LANG==='ko'?'en':'ko')" title="Language">🌐</button>
   <button class="ghost" onclick="loadRegistry()">↻</button>
 </header>
@@ -187,6 +188,7 @@
     <div class="msgs" id="tx-body"></div>
     <div class="modal-foot" id="tx-foot-claude"><div class="cur" id="tx-meta"></div>
       <select id="tx-model" style="background:var(--panel);color:var(--fg);border:1px solid var(--border);border-radius:6px;padding:6px;max-width:110px;font-size:12px"></select>
+      <select id="tx-effort" style="background:var(--panel);color:var(--fg);border:1px solid var(--border);border-radius:6px;padding:6px;max-width:110px;font-size:12px"></select>
       <button class="ghost" onclick="handoff('codex')" data-i18n="🟢 Codex로 전환" title="이 대화를 Codex 새 세션으로 이어갑니다">🟢 Codex로 전환</button>
       <button onclick="closeTx()" data-i18n="닫기">닫기</button>
       <button onclick="txResume(false)" data-i18n="이어가기">이어가기</button>
@@ -219,6 +221,7 @@
       <div id="ag-claude-row" style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
         <span style="font-size:13px;color:var(--muted);flex:0 0 auto" data-i18n="모델">모델</span>
         <select id="ag-model" style="flex:1;background:var(--panel);color:var(--fg);border:1px solid var(--border);border-radius:6px;padding:9px"></select>
+        <select id="ag-effort" style="flex:1;background:var(--panel);color:var(--fg);border:1px solid var(--border);border-radius:6px;padding:9px"></select>
       </div>
       <div id="ag-codex-row" style="display:none;align-items:center;gap:8px;margin-bottom:14px">
         <span style="font-size:13px;color:var(--muted);flex:0 0 auto" data-i18n="모델">모델</span>
@@ -333,6 +336,7 @@ const EN={
 "복사됨! 터미널에 붙여넣으세요:":"Copied! Paste into your terminal:",
 "아래 명령을 복사해 터미널에서 실행:":"Copy this command and run it in your terminal:",
 "모델 (Claude)":"Model (Claude)","기본값":"Default","모델: 머신 설정":"Model: machine default",
+ "노력: 머신 설정":"Effort: machine default","기본 노력 저장됨: ":"Default effort saved: ","노력":"Effort",
 "기본 모델 저장됨: ":"Default model saved: ","머신 설정":"machine default",
 "🟢 Codex로 전환":"🟢 Switch to Codex","🟧 Claude로 전환":"🟧 Switch to Claude",
 "여기서 되감아 새 세션으로 이어가기":"Rewind to here — branch a new session from this point",
@@ -353,14 +357,34 @@ function applyStatic(){
   document.querySelectorAll("[data-i18n-title]").forEach(e=>e.title=t(e.dataset.i18nTitle));
   const lb=document.getElementById("langbtn"); if(lb) lb.textContent=LANG==="ko"?"🌐 KO":"🌐 EN";
 }
-let DEFMODEL="";
+let DEFMODEL="", DEFEFFORT="high";   // effort: claude's own default runs hot for long sessions
 function modelOpts(sel,cur){
   if(!sel) return;
   const d=t("기본값")+(DEFMODEL?` (${DEFMODEL})`:"");
   sel.innerHTML=`<option value="">${d}</option><option value="fable">Fable 5.1</option><option value="opus">Opus 5</option><option value="sonnet">Sonnet 4.6</option><option value="haiku">Haiku 4.5</option>`;
   sel.value=cur||"";
 }
+const EFFORTS=["low","medium","high","xhigh","max"];
+function effortOpts(sel, prefix){
+  if(!sel) return;
+  sel.innerHTML=`<option value="">${prefix}${t("노력: 머신 설정")}</option>`+
+    EFFORTS.map(e=>`<option value="${e}">${prefix}${e}</option>`).join("");
+}
+async function setDefaultEffort(v){
+  DEFEFFORT=v;
+  try{ await fetch("/api/prefs",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({defaultEffort:v})});
+       toast(t("기본 노력 저장됨: ")+(v||t("머신 설정")));
+  }catch(e){ toast(t("오류: ")+e.message); }
+  fillModelSelects();
+}
 function fillModelSelects(){
+  const he=document.getElementById("defeffort");
+  if(he){ effortOpts(he,"⚙ "); he.value=DEFEFFORT; }
+  effortOpts(document.getElementById("ag-effort"),"");
+  effortOpts(document.getElementById("tx-effort"),"");
+  const ae=document.getElementById("ag-effort"); if(ae) ae.value=DEFEFFORT;
+  const te=document.getElementById("tx-effort"); if(te) te.value=DEFEFFORT;
   const h=document.getElementById("defmodel");
   if(h){ h.innerHTML=`<option value="">⚙ ${t("모델: 머신 설정")}</option><option value="fable">⚙ Fable 5.1</option><option value="opus">⚙ Opus 5</option><option value="sonnet">⚙ Sonnet 4.6</option><option value="haiku">⚙ Haiku 4.5</option>`; h.value=DEFMODEL; }
   modelOpts(document.getElementById("ag-model"));
@@ -375,6 +399,7 @@ async function initLang(){
   try{const r=await(await fetch("/api/prefs")).json();
     if(r.ui&&r.ui.lang){LANG=r.ui.lang;localStorage.setItem("csm.lang",LANG);}
     if(r.ui&&r.ui.defaultModel!==undefined) DEFMODEL=r.ui.defaultModel||"";
+    if(r.ui&&r.ui.defaultEffort!==undefined) DEFEFFORT=r.ui.defaultEffort||"";
   }catch(e){}
   applyStatic(); fillModelSelects();
 }
@@ -698,7 +723,7 @@ async function preview(mid,cwd,sessionId,agent){
   }catch(e){ $("#tx-body").innerHTML=`<div class="empty">${esc(e.message)}</div>`; }
 }
 function closeTx(){ $("#tx").classList.remove("show"); }
-function txResume(fork){ if(!TX) return; const m=(document.getElementById("tx-model")||{}).value||DEFMODEL; closeTx(); resume(TX.mid,TX.cwd,TX.sessionId,fork,m); }
+function txResume(fork){ if(!TX) return; const m=(document.getElementById("tx-model")||{}).value||DEFMODEL; const e=(document.getElementById("tx-effort")||{}).value||DEFEFFORT; closeTx(); resume(TX.mid,TX.cwd,TX.sessionId,fork,m,e); }
 function renderAttach(){
   const box=$("#tx-attach"), a=(TX&&TX.attachments)||[];
   box.style.display=a.length?"block":"none";
@@ -881,9 +906,10 @@ async function launchIn(mid,cwd){
   if(name===null) return; // 취소
   const body={cwd}; if(name.trim()) body.name=name.trim();
   const m=(document.getElementById("ag-model")||{}).value||DEFMODEL; if(m) body.model=m;
+  const ef=(document.getElementById("ag-effort")||{}).value||DEFEFFORT; if(ef) body.effort=ef;
   doLaunch(mid,body);
 }
-function resume(mid,cwd,sessionId,fork,model){ const b={cwd,resumeId:sessionId,fork}; const m=model!==undefined?model:DEFMODEL; if(m) b.model=m; doLaunch(mid,b); }
+function resume(mid,cwd,sessionId,fork,model,effort){ const b={cwd,resumeId:sessionId,fork}; const m=model!==undefined?model:DEFMODEL; if(m) b.model=m; const e=effort!==undefined?effort:DEFEFFORT; if(e) b.effort=e; doLaunch(mid,b); }
 async function doLaunch(mid,body){
   showLoading(t("🟧 Claude 세션 여는 중… (trust 자동승인 + bridge 대기)"));
   try{
