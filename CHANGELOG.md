@@ -5,6 +5,46 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-09-11
+
+### Added
+- **Search every session on every machine.** One box in the sidebar: typing
+  filters the folder lists of all machines live, Enter searches all sessions
+  everywhere. Each agent scans its own disk (`GET /search-all?q=&limit=`) so the
+  machines work in parallel and only the hits cross the network; results are
+  grouped per machine, and a slow or unreachable one can't hold up the rest.
+  Every result carries a snippet showing where the term appeared — the
+  conversation when possible, otherwise the tool output, path or command that
+  matched.
+- **Effort selection.** Pick `low`…`max` per new session / per resume, with a
+  server-saved default (high) in the header. Passed as claude's `--effort`, so a
+  launch overrides whatever `effortLevel` that machine's settings hold.
+- **Folder picker: create a subfolder in place** with the ＋ new-folder button.
+
+### Changed
+- **Codex rollouts that are imports of a Claude session are hidden.** Codex
+  Desktop can mirror a Claude conversation into its own history, which listed
+  every mirrored conversation twice. Filtered using Codex's own import manifest;
+  `CSM_SHOW_IMPORTED_CODEX=1` restores them.
+- Model picker labels follow the current lineup (Opus 5, Fable 5.1).
+
+### Fixed
+- **Sessions would not start on claude >= 2.1.25x.** The folder-trust dialog now
+  highlights "No, exit" first, so the launchers' bare Enter quit the session and
+  every launch into an untrusted folder timed out. Both launchers now move the
+  selection before confirming. The marker is `❯` on a POSIX pty but a plain `>`
+  on a Windows console, and stray `>` characters survive ANSI stripping, so the
+  check reads the character right before each option label rather than the last
+  marker on screen. Older claude builds keep the previous path.
+- Launchers mirror the first 64KB of console output into the per-launch log,
+  which was previously always empty and hid the failure above.
+
+### Performance
+- Session search reads a transcript once, not three times: the byte scan that
+  selects a file, the parse that builds the row, and the snippet now share one
+  pass, capped at 24MB per transcript. On an 830MB/76-session machine a common
+  term went from 8 hits in a truncated 12s to all 21 in 7s.
+
 ## [0.5.0] - 2026-06-11
 
 ### Changed

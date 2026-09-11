@@ -30,12 +30,18 @@ all from one browser tab. No more SSHing into each box and typing
 - **Terminal hand-off** — open a codex TUI on **the PC your browser is on**
   (the control plane detects the client machine by its tailnet IP; remote targets
   are reached with `ssh -t`).
-- **Model selection** — choose a model per new session / per resume, and set a
-  server-saved default from the header.
+- **Model and effort selection** — choose both per new session / per resume, and
+  set server-saved defaults from the header. Effort is passed as `--effort`, so a
+  session runs at the level you picked regardless of what that machine's
+  `effortLevel` setting says.
 - **Rewind & cross-agent switch** — branch a new session from any point in a
   transcript, or continue the conversation in the *other* agent (🟧 Claude ↔ 🟢 Codex).
 - **Browse by folder**, per machine; **search sessions** by title *and conversation
   content*; **preview** a transcript before resuming.
+- **Search everything** — one box in the sidebar. Typing filters the folder list
+  of every machine at once; Enter searches *all sessions on all machines*, each
+  agent scanning its own disk in parallel and returning only the hits, with a
+  snippet showing where the term appeared.
 - **Automatic skill sync** — your `~/.claude/skills` converge to the newest version
   of each skill across all machines (last-write-wins by mtime), excluding
   credential/encrypted files. Edit anywhere; it propagates.
@@ -44,6 +50,16 @@ all from one browser tab. No more SSHing into each box and typing
 - **Korean/English UI** — 🌐 toggle; the preference persists server-side.
 - Single static web UI (vanilla JS), mobile-friendly. Pure Python 3 standard
   library on the backend (plus `pywinpty` on Windows agents).
+
+### Duplicate Codex sessions
+
+Codex Desktop can mirror a Claude Code conversation into its own history
+("external agent import"). ASM reads both stores, so those copies would list
+every mirrored conversation twice. They are filtered out using the import
+manifest Codex writes (`~/.codex/external_agent_session_imports.json`); set
+`CSM_SHOW_IMPORTED_CODEX=1` on an agent to list them again. To stop the copies
+at the source, set `external-agent-import-sync-enabled = false` under
+`[desktop]` in `~/.codex/config.toml`.
 
 ## Codex desktop app integration
 
@@ -143,7 +159,7 @@ bind the control plane to your VPN/LAN IP in `csm.config.json` (`control.host`).
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md). Current version: **0.5.0**.
+See [CHANGELOG.md](CHANGELOG.md). Current version: **0.6.0**.
 
 ## License
 
