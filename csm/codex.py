@@ -15,12 +15,24 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 IS_WIN = os.name == "nt"
+
+# Codex Desktop can mirror a Claude Code conversation into its own history
+# ("external agent import"). Those rollouts are copies of a Claude session we
+# already list, so showing them doubles every conversation in the picker. Hide
+# them; set CSM_SHOW_IMPORTED_CODEX=1 to get them back.
+SHOW_IMPORTED = os.environ.get("CSM_SHOW_IMPORTED_CODEX") == "1"
+_UUID_RE = re.compile(
+    r"([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})\.jsonl$"
+)
+_IMPORT_MARKER = b"external-import-turn"
+_imports_cache: dict = {"mtime": None, "ids": frozenset()}
 
 
 def codex_home() -> Path:
@@ -120,11 +132,53 @@ def parse_rollout(path: Path, want_msgs: bool = False) -> dict | None:
     return row
 
 
+def imported_thread_ids() -> frozenset:
+    """Session ids Codex Desktop imported from another agent.
+
+    Codex records every import in external_agent_session_imports.json, which is
+    both cheaper and more exact than reading the rollouts, so use it when it is
+    there and re-read it only when it changes.
+    """
+    f = codex_home() / "external_agent_session_imports.json"
+    try:
+        mtime = f.stat().st_mtime
+    except OSError:
+        _imports_cache.update(mtime=None, ids=frozenset())
+        return _imports_cache["ids"]
+    if _imports_cache["mtime"] != mtime:
+        ids = set()
+        try:
+            for r in (json.loads(f.read_text(encoding="utf-8")) or {}).get("records") or []:
+                tid = r.get("imported_thread_id")
+                if tid:
+                    ids.add(tid)
+        except (OSError, json.JSONDecodeError, AttributeError):
+            ids = set()
+        _imports_cache.update(mtime=mtime, ids=frozenset(ids))
+    return _imports_cache["ids"]
+
+
+def _is_imported(path: Path, known: frozenset) -> bool:
+    m = _UUID_RE.search(path.name)
+    if m and m.group(1) in known:
+        return True
+    if known:
+        return False   # the manifest is authoritative once we have one
+    try:      # no manifest (older Codex): the marker sits in the opening records
+        with path.open("rb") as fh:
+            return _IMPORT_MARKER in fh.read(65536)
+    except OSError:
+        return False
+
+
 def _all_rollouts():
     d = sessions_dir()
     if not d.is_dir():
         return
-    yield from d.rglob("rollout-*.jsonl")
+    known = frozenset() if SHOW_IMPORTED else imported_thread_ids()
+    for f in d.rglob("rollout-*.jsonl"):
+        if SHOW_IMPORTED or not _is_imported(f, known):
+            yield f
 
 
 def list_sessions_for_cwd(cwd: str) -> list[dict]:
