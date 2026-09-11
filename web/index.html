@@ -49,6 +49,13 @@
   .fsearch.on .clear { display:block; }
   .fsearch .searchbox { padding-right:30px; }
   .gpath { font-size:11px; color:var(--muted); margin:10px 0 -6px 2px; word-break:break-all; }
+  .ghead { font-size:13px; font-weight:600; color:var(--muted); letter-spacing:.02em;
+    margin-top:14px; padding:7px 8px; border-radius:7px; display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
+  .ghead.clickable { cursor:pointer; }
+  .ghead.clickable:hover { background:var(--panel); }
+  .gcaret { display:inline-block; transition:transform .12s; flex:0 0 auto; }
+  .gmachine.open > .ghead .gcaret { transform:rotate(90deg); }
+  .gmachine:not(.open) > .gbody { display:none; }
   .folder { display:flex; align-items:center; gap:6px; padding:6px 6px 6px 9px; border-radius:6px; cursor:pointer; }
   .folder:hover { background:var(--panel); }
   .folder.active { background:var(--panel); border-left:2px solid var(--accent); }
@@ -314,7 +321,7 @@ const EN={
 "Codex 세션 생성됨":"Codex session created","⌨ 터미널":"⌨ Terminal","📋 터미널 명령 복사됨 — 터미널에 붙여넣으세요":"📋 Terminal command copied — paste it into your terminal","아래 명령을 복사해 터미널에서 실행:":"Copy this command and run it in your terminal:","터미널에서 이어가기 (SSH 명령 복사)":"Continue in a terminal (copy SSH command)","터미널에서 인터랙티브로 이어가기":"Continue interactively in a terminal","열기":"Open","👁 미리보기":"👁 Preview","Fork":"Fork","삭제":"Delete","■ 종료":"■ Stop","💬 대화":"💬 Chat",
 "📌 고정":"📌 Pin","📌 고정됨":"📌 Pinned","상단 고정":"Pin to top","상단 고정 해제":"Unpin from top",
 "폴더 없음 — ＋로 추가":"No folders — add with ＋",
- "🔎 폴더 검색 · Enter로 전체 세션 검색":"🔎 Filter folders · Enter to search all sessions","지우기":"Clear","🔎 전체 세션 검색":"🔎 Search all sessions","닫기":"Close","검색 중…":"Searching…","머신":"machines","건":"","일부만":"partial","결과가 많아 일부만 표시합니다":"Too many matches — showing the most recent","검색할 수 있는 머신이 없습니다":"No reachable machines","노드의 폴더를 고르세요.":"Pick a folder.","📌 추가됨":"📌 added","더보기":"Show more","접기":"Show less",
+ "🔎 폴더 검색 · Enter로 전체 세션 검색":"🔎 Filter folders · Enter to search all sessions","지우기":"Clear","🔎 전체 세션 검색":"🔎 Search all sessions","닫기":"Close","검색 중…":"Searching…","머신":"machines","건":"","일부만":"partial","결과가 많아 일부만 표시합니다":"Too many matches — showing the most recent","검색할 수 있는 머신이 없습니다":"No reachable machines","모두 펼치기":"Expand all","모두 접기":"Collapse all","노드의 폴더를 고르세요.":"Pick a folder.","📌 추가됨":"📌 added","더보기":"Show more","접기":"Show less",
 "이 폴더 세션 전체 삭제":"Delete all sessions in this folder","목록에서 제거(핀 해제)":"Remove from list (unpin)","머신 제거":"Remove machine",
 "에이전트 없음":"no agent","개":"","　":" ",
 "이 세션을 삭제할까요? 되돌릴 수 없습니다.":"Delete this session? This cannot be undone.",
@@ -614,6 +621,7 @@ async function searchAllSessions(query){
   main.innerHTML = `<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
       <div style="flex:1;min-width:160px"><div class="sec-title">${t("🔎 전체 세션 검색")}</div>
         <div style="word-break:break-all">${esc(q)}</div></div>
+      <button class="ghost" id="gtoggle" style="display:none" onclick="toggleAllGroups()">${t("모두 펼치기")}</button>
       <button class="ghost" onclick="clearGlobalSearch()">${t("닫기")}</button></div>
     <div id="gstatus" class="empty sm"></div><div id="gresults"></div>`;
   const status = $("#gstatus"), host = $("#gresults");
@@ -626,7 +634,8 @@ async function searchAllSessions(query){
 
   await Promise.all(targets.map(async m => {
     const box = document.createElement("div");
-    box.innerHTML = `<div class="sec-title" style="margin-top:14px">${osIcon(m.os)} ${esc(m.name)}
+    box.className = "gmachine";
+    box.innerHTML = `<div class="ghead">${osIcon(m.os)} ${esc(m.name)}
       <span class="badge">${t("검색 중…")}</span></div>`;
     host.appendChild(box);
     let r;
@@ -639,11 +648,37 @@ async function searchAllSessions(query){
     const note = r.error ? `<span class="badge">${esc(r.error)}</span>`
       : `<span class="badge">${rows.length}${t("건")}</span>` +
         (r.truncated ? `<span class="badge" title="${t("결과가 많아 일부만 표시합니다")}">${t("일부만")}</span>` : "");
-    box.innerHTML = `<div class="sec-title" style="margin-top:14px">${osIcon(m.os)} ${esc(m.name)} ${note}</div>` +
-      rows.map(x => `<div class="gpath">${esc(x.cwd || "")}</div>` + sessionRow(x, m.id, x.cwd || "")).join("");
+    // A machine with a handful of hits opens on its own; a long one stays shut
+    // so the page reads as a summary of where the matches are.
+    const open = rows.length > 0 && rows.length <= 3;
+    box.classList.toggle("open", open);
+    const caret = rows.length ? `<span class="gcaret">▸</span>` : "";
+    box.innerHTML = `<div class="ghead${rows.length ? " clickable" : ""}"
+        ${rows.length ? `onclick="toggleGroup(this)"` : ""}>
+        ${caret}${osIcon(m.os)} ${esc(m.name)} ${note}</div>
+      <div class="gbody">` +
+      rows.map(x => `<div class="gpath">${esc(x.cwd || "")}</div>` + sessionRow(x, m.id, x.cwd || "")).join("") +
+      `</div>`;
     tick();
   }));
+  if(seq === GSEQ){ $("#gtoggle").style.display = total ? "" : "none"; syncGroupToggle(); }
   if(seq === GSEQ && total === 0) status.textContent = t("검색 결과 없음");
+}
+const groupsWithHits = () =>
+  [...document.querySelectorAll("#gresults .gmachine")].filter(g => g.querySelector(".gbody").children.length);
+// The button says what the next click will do, so it has to follow the groups —
+// including when they are opened one at a time.
+function syncGroupToggle(){
+  const b = $("#gtoggle"); if(!b) return;
+  const groups = groupsWithHits();
+  b.textContent = groups.some(g => !g.classList.contains("open")) ? t("모두 펼치기") : t("모두 접기");
+}
+function toggleGroup(head){ head.parentNode.classList.toggle("open"); syncGroupToggle(); }
+function toggleAllGroups(){
+  const groups = groupsWithHits();
+  const expand = groups.some(g => !g.classList.contains("open"));
+  groups.forEach(g => g.classList.toggle("open", expand));
+  syncGroupToggle();
 }
 function clearGlobalSearch(){
   GSEQ++;
