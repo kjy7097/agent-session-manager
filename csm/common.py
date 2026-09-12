@@ -490,6 +490,10 @@ def search_all_sessions(query: str, limit: int = 60,
 
     live = {s["session_id"]: s for s in live_sessions() if s.get("session_id")}
     names = session_names()
+    # A session renamed in the UI carries that name only here, never in the
+    # transcript, so the byte scan below can't see the very title the user is
+    # reading off the screen. Match it separately.
+    named = {sid: nm for sid, nm in names.items() if _norm(q) in _norm(nm)}
     deadline = time.monotonic() + budget_s
     out, scanned, truncated = [], 0, False
 
@@ -498,7 +502,8 @@ def search_all_sessions(query: str, limit: int = 60,
             truncated = True
             break
         scanned += 1
-        if not _file_has(f, needles):
+        by_name = f.stem in named
+        if not by_name and not _file_has(f, needles):
             continue
         row = parse_session(f, find=lowq)
         ls = live.get(row["session_id"])
@@ -512,9 +517,9 @@ def search_all_sessions(query: str, limit: int = 60,
         if names.get(row["session_id"]):
             row["title"] = names[row["session_id"]]
         row["agent"] = "claude"
-        if not row["snippet"]:   # matched only in the title we just built
-            for field in (row.get("title"), row.get("first_prompt")):
-                if field and lowq in field.lower():
+        if not row["snippet"]:   # matched in a name or title, not in the body
+            for field in (named.get(f.stem), row.get("title"), row.get("first_prompt")):
+                if field and _find_loose(field, lowq)[0] >= 0:
                     row["snippet"] = _snip(field, lowq)
                     break
         out.append(row)
@@ -524,14 +529,26 @@ def search_all_sessions(query: str, limit: int = 60,
             "scanned": scanned, "matched": len(out)}
 
 
+def _norm(s: str) -> str:
+    """Lowercased and space-free. Korean is written with the spaces the writer
+    felt like using, so "과제찾기" has to find "과제 찾기"."""
+    return (s or "").lower().replace(" ", "")
+
+
+def _escape_form(s: str) -> str:
+    r"""How a string looks inside a jsonl when the writer escaped it: non-ASCII
+    as \uXXXX, everything else literal. json.dumps never escapes a space, so
+    escaping one would make a multi-word term unfindable."""
+    return "".join(("\\u%04x" % ord(c)) if ord(c) > 127 else c for c in s)
+
+
 def _needles(q: str) -> list[bytes]:
     r"""Byte patterns to look for. A jsonl mixes raw UTF-8 with \uXXXX escapes
-    (both appear in the same file), so non-ASCII queries need both forms."""
+    (both appear in the same file), so a non-ASCII term needs both forms."""
     lowq = q.lower()
     out = [lowq.encode("utf-8")]
     if any(ord(c) > 127 for c in q):
-        esc = "".join("\\u%04x" % ord(c) for c in lowq)
-        out.append(esc.encode("ascii"))
+        out.append(_escape_form(lowq).encode("utf-8"))
     return out
 
 
@@ -539,6 +556,11 @@ def _file_has(path: Path, needles: list[bytes], chunk: int = 1 << 20) -> bool:
     """Case-insensitive byte scan. bytes.lower() only folds ASCII, which is
     exactly right: Hangul and other scripts here have no case to fold."""
     longest = max(len(n) for n in needles)
+    # Squeezing spaces out of every chunk costs a copy of the whole file, so do
+    # it only where it pays: Korean and the like, written with whatever spacing
+    # the writer chose. An ASCII term is looked for as typed.
+    loose = any(b >= 0x80 for n in needles for b in n)
+    squeezed_needles = [n.replace(b" ", b"") for n in needles] if loose else []
     try:
         with path.open("rb") as fh:
             tail = b""
@@ -550,6 +572,11 @@ def _file_has(path: Path, needles: list[bytes], chunk: int = 1 << 20) -> bool:
                 for n in needles:
                     if n in window:
                         return True
+                if squeezed_needles:
+                    flat = window.replace(b" ", b"")
+                    for n in squeezed_needles:
+                        if n in flat:
+                            return True
                 tail = buf[-(longest - 1):] if longest > 1 else b""
     except OSError:
         return False
@@ -592,8 +619,8 @@ def _str_needles(q: str) -> tuple:
     plus its \uXXXX escape, since a file mixes both."""
     out = [q]
     if any(ord(c) > 127 for c in q):
-        out.append("".join("\\u%04x" % ord(c) for c in q))
-    return tuple(out)
+        out.append(_escape_form(q))
+    return tuple(out + [n.replace(" ", "") for n in out if " " in n])
 
 
 def _record_snippet(obj: dict, q: str) -> str | None:
@@ -602,10 +629,10 @@ def _record_snippet(obj: dict, q: str) -> str | None:
     the scan that picked this file looks at those too."""
     if obj.get("type") in ("user", "assistant") and not obj.get("isMeta"):
         txt = _text((obj.get("message") or {}).get("content"))
-        if txt and q in txt.lower():
+        if txt and _find_loose(txt, q)[0] >= 0:
             return _snip(txt, q)
     for txt in _walk_strings(obj):
-        if q in txt.lower():
+        if _find_loose(txt, q)[0] >= 0:
             return _snip(txt, q)
     return None
 
@@ -625,13 +652,35 @@ def _walk_strings(obj, depth: int = 0):
             yield from _walk_strings(v, depth + 1)
 
 
-def _snip(text: str, q: str, width: int = 140) -> str:
+def _find_loose(text: str, q: str) -> tuple[int, int]:
+    """Where `q` sits in `text`, ignoring case and spacing. Returns (-1, 0) when
+    it isn't there."""
     low = text.lower()
     i = low.find(q)
+    if i >= 0:
+        return i, len(q)
+    qn = _norm(q)
+    if not qn:
+        return -1, 0
+    squeezed, back = [], []          # spaces dropped, plus a map to the original
+    for j, ch in enumerate(low):
+        if ch != " ":
+            squeezed.append(ch)
+            back.append(j)
+    k = "".join(squeezed).find(qn)
+    if k < 0:
+        return -1, 0
+    start = back[k]
+    end = back[k + len(qn) - 1] + 1
+    return start, end - start
+
+
+def _snip(text: str, q: str, width: int = 140) -> str:
+    i, n = _find_loose(text, q)
     if i < 0:
         return text[:width]
     start = max(0, i - width // 3)
-    end = min(len(text), i + len(q) + width // 2)
+    end = min(len(text), i + n + width // 2)
     s = text[start:end].replace("\n", " ").strip()
     return ("…" if start > 0 else "") + s + ("…" if end < len(text) else "")
 
