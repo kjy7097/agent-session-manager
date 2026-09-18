@@ -88,7 +88,8 @@ def active() -> str:
 def set_active(name: str) -> dict:
     if name and not (accounts_dir() / name).is_dir():
         return {"error": f"unknown account: {name}"}
-    seed_config(name)      # also repairs accounts made before this existed
+    ensure_links(name)     # also repairs accounts made before an entry was shared
+    seed_config(name)      # …and before this existed
     try:
         if name:
             _active_file().write_text(name, encoding="utf-8")
@@ -119,6 +120,7 @@ def status(name: str, timeout: int = 20) -> dict:
 
 
 def _row(name: str) -> dict:
+    ensure_links(name)
     st = status(name)
     return {
         "name": name,
@@ -193,6 +195,23 @@ def _config_file(name: str) -> Path:
     return (Path.home() / ".claude.json") if not name else (config_dir_for(name) / ".claude.json")
 
 
+def ensure_links(name: str) -> None:
+    """Link anything an account should be sharing but isn't.
+
+    SHARED grows, and an account made before an entry was added would otherwise
+    keep missing it forever — silently, since the symptom is a prompt or a
+    missing CLAUDE.md rather than an error.
+    """
+    if not name:
+        return
+    d = config_dir_for(name)
+    if not d.is_dir():
+        return
+    home = common.claude_home()
+    for entry in SHARED:
+        _link(home / entry, d / entry)
+
+
 def seed_config(name: str) -> None:
     """Make a fresh account usable without a console.
 
@@ -238,9 +257,7 @@ def create(name: str) -> dict:
         d.mkdir(parents=True)
     except OSError as e:
         return {"error": str(e)}
-    home = common.claude_home()
-    for entry in SHARED:
-        _link(home / entry, d / entry)
+    ensure_links(name)
     seed_config(name)
     return {"ok": True, "name": name, "configDir": str(d)}
 
