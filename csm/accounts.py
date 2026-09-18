@@ -86,6 +86,7 @@ def active() -> str:
 def set_active(name: str) -> dict:
     if name and not (accounts_dir() / name).is_dir():
         return {"error": f"unknown account: {name}"}
+    seed_config(name)      # also repairs accounts made before this existed
     try:
         if name:
             _active_file().write_text(name, encoding="utf-8")
@@ -177,6 +178,54 @@ def _link(src: Path, dst: Path) -> None:
             shutil.copy2(src, dst)
 
 
+# Carried from the machine's own config into a new account. Deliberately a short
+# allowlist, not "everything but the login": the rest of that file is caches keyed
+# to an org and a model roster, and handing one account another's would be wrong.
+INHERIT = ("hasCompletedOnboarding", "lastOnboardingVersion",
+           "tipsHistory", "tipsHistoryByCommand", "projects")
+
+
+def _config_file(name: str) -> Path:
+    """claude keeps this file beside the config dir for the default account and
+    inside it for a named one."""
+    return (Path.home() / ".claude.json") if not name else (config_dir_for(name) / ".claude.json")
+
+
+def seed_config(name: str) -> None:
+    """Make a fresh account usable without a console.
+
+    A new config dir has never been through first run, so claude opens its
+    onboarding wizard — a theme picker the launcher has no answer for — and the
+    launch just times out. It also has no record of which folders are trusted.
+    Both live in .claude.json, which accounts can't share because it carries
+    oauthAccount, so copy across the few keys that are about this machine rather
+    than about who is signed in. Existing values win: this must never undo
+    something the account already decided.
+    """
+    if not name:
+        return
+    src, dst = _config_file(""), _config_file(name)
+    try:
+        base = json.loads(src.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        base = {}
+    try:
+        cur = json.loads(dst.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        cur = {}
+    changed = False
+    for k in INHERIT:
+        if k in base and k not in cur:
+            cur[k] = base[k]
+            changed = True
+    if changed:
+        try:
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            dst.write_text(json.dumps(cur, indent=2), encoding="utf-8")
+        except OSError:
+            pass
+
+
 def create(name: str) -> dict:
     if not _valid(name):
         return {"error": "invalid account name"}
@@ -190,6 +239,7 @@ def create(name: str) -> dict:
     home = common.claude_home()
     for entry in SHARED:
         _link(home / entry, d / entry)
+    seed_config(name)
     return {"ok": True, "name": name, "configDir": str(d)}
 
 
@@ -301,6 +351,7 @@ def login_code(token: str, code: str) -> dict:
         return {"error": "timed out completing login"}
     with _lock:
         _logins.pop(token, None)
+    seed_config(rec["name"])
     st = status(rec["name"])
     if not st.get("loggedIn"):
         return {"error": "login did not complete",
