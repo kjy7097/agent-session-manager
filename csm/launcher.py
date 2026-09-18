@@ -8,7 +8,7 @@ here — it discovers the resulting session by polling ~/.claude/sessions/*.json
 
 Usage:
     python launcher.py <folder> <name> <resume_id|''> <0|1 fork> <claude_path>
-                       [prompt] [model] [effort]
+                       [prompt] [model] [effort] [config_dir]
 
 If [prompt] is given, it is typed into the session (PTY stdin) once the session
 is ready — interactive, no `claude -p`. The session stays alive afterward.
@@ -60,6 +60,7 @@ def main() -> int:
     prompt = sys.argv[6] if len(sys.argv) > 6 else ""
     model = sys.argv[7] if len(sys.argv) > 7 else ""
     effort = sys.argv[8] if len(sys.argv) > 8 else ""
+    config_dir = sys.argv[9] if len(sys.argv) > 9 else ""
 
     folder = os.path.realpath(os.path.expanduser(folder))
     if not os.path.isdir(folder):
@@ -81,6 +82,12 @@ def main() -> int:
         # child
         os.chdir(folder)
         os.environ["TERM"] = "xterm-256color"
+        # An account is a config dir; the default account is the *absence* of
+        # the variable, since claude keeps its config file outside ~/.claude.
+        if config_dir:
+            os.environ["CLAUDE_CONFIG_DIR"] = config_dir
+        else:
+            os.environ.pop("CLAUDE_CONFIG_DIR", None)
         os.execv(claude_path, argv)
         os._exit(127)  # unreachable on success
 

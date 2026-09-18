@@ -55,6 +55,7 @@ def main() -> int:
     prompt = sys.argv[6] if len(sys.argv) > 6 else ""
     model = sys.argv[7] if len(sys.argv) > 7 else ""
     effort = sys.argv[8] if len(sys.argv) > 8 else ""
+    config_dir = sys.argv[9] if len(sys.argv) > 9 else ""
 
     if not os.path.isdir(folder):
         sys.stderr.write(f"launcher_win: folder not found: {folder}\n")
@@ -72,7 +73,15 @@ def main() -> int:
 
     from winpty import PtyProcess
 
-    proc = PtyProcess.spawn(argv, cwd=folder, dimensions=(40, 120))
+    # An account is a config dir; the default account is the *absence* of the
+    # variable, since claude keeps its config file outside ~/.claude.
+    env = dict(os.environ)
+    if config_dir:
+        env["CLAUDE_CONFIG_DIR"] = config_dir
+    else:
+        env.pop("CLAUDE_CONFIG_DIR", None)
+
+    proc = PtyProcess.spawn(argv, cwd=folder, dimensions=(40, 120), env=env)
 
     trust_sent = [0]
     last = [0.0]

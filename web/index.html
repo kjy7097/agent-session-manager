@@ -137,6 +137,7 @@
   <h1>🟧 Agent Session Manager</h1>
   <span class="sp"></span>
   <button class="ghost" onclick="openAddMachine()" data-i18n="＋ 머신">＋ 머신</button>
+  <button class="ghost" id="acctbtn" onclick="openAccounts()" data-i18n-title="클로드 계정 전환">👤</button>
   <select id="defmodel" class="ghost" onchange="saveDefModel(this.value)" title="기본 모델 (새 세션·이어가기에 적용)" style="background:var(--panel);color:var(--fg);border:1px solid var(--border);border-radius:6px;padding:6px 6px;font-size:12px;max-width:110px"></select>
   <select id="defeffort" class="ghost" onchange="setDefaultEffort(this.value)" title="기본 노력 (새 세션·이어가기에 적용)" style="background:var(--panel);color:var(--fg);border:1px solid var(--border);border-radius:6px;padding:6px 6px;font-size:12px;max-width:110px"></select>
   <button class="ghost" id="langbtn" onclick="setLang(LANG==='ko'?'en':'ko')" title="Language">🌐</button>
@@ -211,6 +212,29 @@
       <button class="ghost" onclick="openTerm(TX.mid,TX.cwd,TX.sessionId);closeTx()" title="터미널에서 인터랙티브로 이어가기" data-i18n="⌨ 터미널">⌨ 터미널</button>
       <button class="ghost" onclick="handoff('claude')" data-i18n="🟧 Claude로 전환" title="이 대화를 Claude 새 세션으로">🟧 Claude로 전환</button>
       <button onclick="closeTx()" data-i18n="닫기">닫기</button></div>
+  </div>
+</div>
+
+<div class="modal-bg" id="acct" onclick="if(event.target.id==='acct')closeAccounts()">
+  <div class="modal" style="width:min(560px,96vw)">
+    <h3 data-i18n="클로드 계정">클로드 계정</h3>
+    <div id="acct-machine" style="font-size:12px;color:var(--muted);padding:10px 18px 0"></div>
+    <div id="acct-list" style="padding:12px 18px"></div>
+    <div id="acct-login" style="display:none;padding:0 18px 12px">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:6px" data-i18n="아래 주소를 열어 로그인한 뒤, 받은 코드를 붙여넣으세요.">아래 주소를 열어 로그인한 뒤, 받은 코드를 붙여넣으세요.</div>
+      <a id="acct-url" target="_blank" rel="noopener" style="display:block;font-size:11px;word-break:break-all;color:var(--accent2);margin-bottom:8px"></a>
+      <div style="display:flex;gap:8px">
+        <input id="acct-code" class="searchbox" style="flex:1" spellcheck="false" data-i18n-ph="여기에 코드 붙여넣기" placeholder="여기에 코드 붙여넣기"
+               onkeydown="if(event.key==='Enter')acctSubmitCode()">
+        <button class="primary" onclick="acctSubmitCode()" data-i18n="확인">확인</button>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <span class="cur" id="acct-msg"></span>
+      <input id="acct-new" class="searchbox" style="flex:0 0 130px" spellcheck="false" data-i18n-ph="새 계정 이름" placeholder="새 계정 이름">
+      <button onclick="acctCreate()" data-i18n="＋ 추가">＋ 추가</button>
+      <button class="ghost" onclick="closeAccounts()" data-i18n="닫기">닫기</button>
+    </div>
   </div>
 </div>
 
@@ -321,7 +345,7 @@ const EN={
 "Codex 세션 생성됨":"Codex session created","⌨ 터미널":"⌨ Terminal","📋 터미널 명령 복사됨 — 터미널에 붙여넣으세요":"📋 Terminal command copied — paste it into your terminal","아래 명령을 복사해 터미널에서 실행:":"Copy this command and run it in your terminal:","터미널에서 이어가기 (SSH 명령 복사)":"Continue in a terminal (copy SSH command)","터미널에서 인터랙티브로 이어가기":"Continue interactively in a terminal","열기":"Open","👁 미리보기":"👁 Preview","Fork":"Fork","삭제":"Delete","■ 종료":"■ Stop","💬 대화":"💬 Chat",
 "📌 고정":"📌 Pin","📌 고정됨":"📌 Pinned","상단 고정":"Pin to top","상단 고정 해제":"Unpin from top",
 "폴더 없음 — ＋로 추가":"No folders — add with ＋",
- "🔎 폴더 검색 · Enter로 전체 세션 검색":"🔎 Filter folders · Enter to search all sessions","지우기":"Clear","🔎 전체 세션 검색":"🔎 Search all sessions","닫기":"Close","검색 중…":"Searching…","머신":"machines","건":"","일부만":"partial","결과가 많아 일부만 표시합니다":"Too many matches — showing the most recent","검색할 수 있는 머신이 없습니다":"No reachable machines","모두 펼치기":"Expand all","모두 접기":"Collapse all","노드의 폴더를 고르세요.":"Pick a folder.","📌 추가됨":"📌 added","더보기":"Show more","접기":"Show less",
+ "🔎 폴더 검색 · Enter로 전체 세션 검색":"🔎 Filter folders · Enter to search all sessions","지우기":"Clear","🔎 전체 세션 검색":"🔎 Search all sessions","닫기":"Close","검색 중…":"Searching…","머신":"machines","건":"","일부만":"partial","결과가 많아 일부만 표시합니다":"Too many matches — showing the most recent","검색할 수 있는 머신이 없습니다":"No reachable machines","클로드 계정":"Claude accounts","클로드 계정 전환":"Switch Claude account","로그인 안 됨":"not signed in","사용 중":"in use","사용":"Use","로그인":"Sign in","다시 로그인":"Sign in again","머신 기본":"machine default","계정 없음":"No accounts","새 계정 이름":"New account name","＋ 추가":"＋ Add","이름을 입력하세요":"Enter a name","만드는 중…":"Creating…","계정 전환됨: ":"Switched to: ","이 계정을 삭제할까요? 세션 기록은 공유라 지워지지 않습니다.":"Delete this account? Session history is shared and is not deleted.","로그인 주소를 받는 중…":"Getting the sign-in link…","아래 주소를 열어 로그인한 뒤, 받은 코드를 붙여넣으세요.":"Open the link, sign in, then paste the code you get back.","여기에 코드 붙여넣기":"Paste the code here","확인":"Submit","브라우저에서 로그인한 뒤 코드를 붙여넣으세요":"Sign in in the browser, then paste the code","코드를 붙여넣으세요":"Paste the code","확인 중…":"Checking…","로그인 완료":"Signed in","모두 펼치기":"Expand all","모두 접기":"Collapse all","노드의 폴더를 고르세요.":"Pick a folder.","📌 추가됨":"📌 added","더보기":"Show more","접기":"Show less",
 "이 폴더 세션 전체 삭제":"Delete all sessions in this folder","목록에서 제거(핀 해제)":"Remove from list (unpin)","머신 제거":"Remove machine",
 "에이전트 없음":"no agent","개":"","　":" ",
 "이 세션을 삭제할까요? 되돌릴 수 없습니다.":"Delete this session? This cannot be undone.",
@@ -608,6 +632,113 @@ function renderFolderView(mid,cwd){
     <div style="margin:12px 0 4px" id="slist"><div class="empty">불러오는 중…</div></div>`;
   loadSessionList(mid,cwd,"");
 }
+// ---- Claude accounts -------------------------------------------------------
+// An account is a login the agent keeps on that machine; the picker switches
+// which one new sessions use. Which machine we are configuring follows the
+// folder currently selected in the sidebar, since the accounts live per machine.
+let ACCT_MID = "", ACCT_TOKEN = "";
+function acctMachine(){ return ACCT_MID || FOLDER_MACHINE || (MACHINES.find(m=>m.online&&m.agentReady)||{}).id || ""; }
+function acctMsg(t_, bad){ const e=$("#acct-msg"); if(e){ e.textContent=t_||""; e.style.color = bad ? "var(--danger,#f85149)" : "var(--muted)"; } }
+
+async function openAccounts(mid){
+  ACCT_MID = mid || acctMachine();
+  if(!ACCT_MID){ toast(t("검색할 수 있는 머신이 없습니다")); return; }
+  $("#acct").classList.add("show");
+  $("#acct-login").style.display = "none";
+  acctMsg("");
+  const m = mById(ACCT_MID);
+  $("#acct-machine").textContent = `${osIcon(m.os)} ${m.name}`;
+  $("#acct-list").innerHTML = `<div class="empty sm">${t("불러오는 중…")}</div>`;
+  await acctRefresh();
+}
+function closeAccounts(){ $("#acct").classList.remove("show"); ACCT_TOKEN=""; }
+
+async function acctRefresh(){
+  let r;
+  try{ r = await apiM(ACCT_MID, "accounts"); }
+  catch(e){ $("#acct-list").innerHTML = `<div class="empty sm">${esc(e.message)}</div>`; return; }
+  const rows = r.accounts || [];
+  $("#acct-list").innerHTML = rows.map(a=>{
+    const nj = JSON.stringify(a.name);
+    const who = a.loggedIn
+      ? `${esc(a.email||"")}${a.orgName?` · ${esc(a.orgName)}`:""}${a.subscriptionType?` · ${esc(a.subscriptionType)}`:""}`
+      : `<span style="color:var(--accent2)">${t("로그인 안 됨")}</span>`;
+    const use = a.active
+      ? `<span class="badge live">${t("사용 중")}</span>`
+      : `<button onclick='acctSelect(${nj})'>${t("사용")}</button>`;
+    const login = `<button class="ghost" onclick='acctLogin(${nj})'>${a.loggedIn?t("다시 로그인"):t("로그인")}</button>`;
+    const del = a.isDefault ? "" : `<button class="ghost danger" onclick='acctDelete(${nj})'>${t("삭제")}</button>`;
+    return `<div class="session" style="margin-bottom:8px">
+      <div class="row1"><span class="title">${esc(a.label)}</span>${a.isDefault?`<span class="badge">${t("머신 기본")}</span>`:""}</div>
+      <div class="sub">${who}${a.error?` · <span style="color:var(--accent2)">${esc(a.error)}</span>`:""}</div>
+      <div class="actions">${use}${login}${del}</div></div>`;
+  }).join("") || `<div class="empty sm">${t("계정 없음")}</div>`;
+}
+
+async function acctCreate(){
+  const el = $("#acct-new"), name = (el.value||"").trim();
+  if(!name){ acctMsg(t("이름을 입력하세요"), true); return; }
+  acctMsg(t("만드는 중…"));
+  try{
+    const r = await apiM(ACCT_MID, "accounts/create", {method:"POST",
+      headers:{"Content-Type":"application/json"}, body:JSON.stringify({name})});
+    if(r.error) throw new Error(r.error);
+    el.value = ""; acctMsg("");
+    await acctRefresh();
+    acctLogin(name);            // a new account is useless until it has a login
+  }catch(e){ acctMsg(e.message, true); }
+}
+
+async function acctSelect(name){
+  try{
+    const r = await apiM(ACCT_MID, "accounts/select", {method:"POST",
+      headers:{"Content-Type":"application/json"}, body:JSON.stringify({name})});
+    if(r.error) throw new Error(r.error);
+    toast(t("계정 전환됨: ") + (name || t("머신 기본")));
+    await acctRefresh();
+  }catch(e){ acctMsg(e.message, true); }
+}
+
+async function acctDelete(name){
+  if(!confirm(t("이 계정을 삭제할까요? 세션 기록은 공유라 지워지지 않습니다.") + "\n\n" + name)) return;
+  try{
+    const r = await apiM(ACCT_MID, "accounts/delete", {method:"POST",
+      headers:{"Content-Type":"application/json"}, body:JSON.stringify({name})});
+    if(r.error) throw new Error(r.error);
+    await acctRefresh();
+  }catch(e){ acctMsg(e.message, true); }
+}
+
+async function acctLogin(name){
+  acctMsg(t("로그인 주소를 받는 중…"));
+  $("#acct-login").style.display = "none";
+  try{
+    const r = await apiM(ACCT_MID, "accounts/login", {method:"POST",
+      headers:{"Content-Type":"application/json"}, body:JSON.stringify({name})});
+    if(r.error) throw new Error(r.error);
+    ACCT_TOKEN = r.token;
+    const a = $("#acct-url"); a.href = r.url; a.textContent = r.url;
+    $("#acct-login").style.display = "";
+    $("#acct-code").value = ""; $("#acct-code").focus();
+    acctMsg(t("브라우저에서 로그인한 뒤 코드를 붙여넣으세요"));
+  }catch(e){ acctMsg(e.message, true); }
+}
+
+async function acctSubmitCode(){
+  const code = ($("#acct-code").value||"").trim();
+  if(!ACCT_TOKEN || !code){ acctMsg(t("코드를 붙여넣으세요"), true); return; }
+  acctMsg(t("확인 중…"));
+  try{
+    const r = await apiM(ACCT_MID, "accounts/code", {method:"POST",
+      headers:{"Content-Type":"application/json"}, body:JSON.stringify({token:ACCT_TOKEN, code})});
+    if(r.error) throw new Error(r.error);
+    ACCT_TOKEN = "";
+    $("#acct-login").style.display = "none";
+    acctMsg(t("로그인 완료"));
+    await acctRefresh();
+  }catch(e){ acctMsg(e.message, true); }
+}
+
 // All-machines session search. Each online agent scans its own sessions, so the
 // machines work in parallel and nothing but the hits crosses the network.
 let GSEQ = 0;

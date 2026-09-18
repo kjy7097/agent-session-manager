@@ -25,7 +25,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
-from . import __version__, codex, common, skills
+from . import __version__, accounts, codex, common, skills
 from .config import load_config
 
 HERE = Path(__file__).resolve().parent
@@ -265,9 +265,13 @@ class Agent:
         effort = (body.get("effort") or "").strip()   # optional claude --effort override
         if effort not in ("", "low", "medium", "high", "xhigh", "max"):
             effort = ""
-        # positional tail: prompt, model, effort. Trim from the right so an
-        # unset middle value still lines up with the launcher's argv indexes.
-        tail = [prompt, model, effort]
+        acct = (body.get("account") if body.get("account") is not None
+                else accounts.active())
+        cfg_dir = str(accounts.config_dir_for(acct)) if acct else ""
+        # positional tail: prompt, model, effort, config dir. Trim from the
+        # right so an unset middle value still lines up with the launcher's
+        # argv indexes.
+        tail = [prompt, model, effort, cfg_dir]
         while tail and not tail[-1]:
             tail.pop()
         argv += tail
@@ -475,6 +479,8 @@ def _make_handler(agent: Agent):
                 except ValueError:
                     lim = 60
                 return self._send(agent.search_all(term, lim))
+            if u.path == "/accounts":
+                return self._send(accounts.list_accounts())
             if u.path == "/skills":
                 return self._send(agent.skills_list())
             if u.path == "/skills/pull":
@@ -509,6 +515,23 @@ def _make_handler(agent: Agent):
                 if b.get("delete"):
                     return self._send(agent.manager_delete(cwd))
                 return self._send(agent.manager_open(cwd, fresh=bool(b.get("fresh"))))
+            if u.path == "/accounts/create":
+                return self._send(accounts.create((body.get("name") or "").strip()))
+            if u.path == "/accounts/select":
+                return self._send(accounts.set_active((body.get("name") or "").strip()))
+            if u.path == "/accounts/delete":
+                return self._send(accounts.delete((body.get("name") or "").strip()))
+            if u.path == "/accounts/logout":
+                return self._send(accounts.logout((body.get("name") or "").strip()))
+            if u.path == "/accounts/login":
+                return self._send(accounts.login_start(
+                    (body.get("name") or "").strip(), bool(body.get("console"))))
+            if u.path == "/accounts/code":
+                tok = (body.get("token") or "").strip()
+                code = (body.get("code") or "").strip()
+                if not tok or not code:
+                    return self._send({"error": "token and code required"}, 400)
+                return self._send(accounts.login_code(tok, code))
             if u.path == "/stop":
                 if not body or not body.get("sessionId"):
                     return self._send({"error": "sessionId required"}, 400)
