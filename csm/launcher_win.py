@@ -20,26 +20,38 @@ ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
 
 # The picker's highlight marker: plain ">" on a Windows console, ❯ elsewhere.
 POINTERS = ("\u276f", "\u203a", "\u25b6", ">")
-NO_OPT = "no,exit"
-YES_OPT = "yes,itrustthisfolder"
+# Prompts claude puts in front of a session that nobody is sitting at. Each is
+# (text that identifies the prompt, the option we answer with). Answering the
+# folder-trust prompt already commits to running here, so the import prompt —
+# which only asks whether the CLAUDE.md files of that same trusted folder may
+# be read — is not a wider decision than the one already made.
+PROMPTS = (
+    ("quicksafetycheck", "yes,itrustthisfolder"),
+    ("allowexternalclaude.mdfileimports", "yes,allowexternalimports"),
+)
 
 
-def _trust_needs_down(norm):
-    """Newer claude (>= 2.1.25x) highlights "No, exit" first in the trust dialog,
-    so a bare Enter quits. Return True when we must press Down before Enter.
+def _wanted_option(norm):
+    """The option to land on, for whichever known prompt is on screen."""
+    for needle, want in PROMPTS:
+        if needle in norm and norm.rfind(want) != -1:
+            return want
+    return None
 
-    Checks the character immediately before each option rather than the last
-    pointer on screen: escape-sequence leftovers can strand a stray ">".
+
+def _needs_down(norm):
+    """Whether to move the highlight before pressing Enter.
+
+    Newer claude highlights the refusing option first, so a bare Enter quits or
+    declines. The marker is read from the character immediately before the
+    option label rather than the last marker on screen, because
+    escape-sequence leftovers can strand a stray ">".
     """
-    i = norm.rfind(NO_OPT)
-    j = norm.rfind(YES_OPT)
-    if i == -1 or j == -1:
-        return False  # not the newer two-option dialog: keep the old bare Enter
-    if i and norm[i - 1] in POINTERS:
-        return True
-    if j and norm[j - 1] in POINTERS:
-        return False
-    return True  # dialog is up but no marker seen: newer claude defaults to "No"
+    want = _wanted_option(norm)
+    if want is None:
+        return False          # unknown prompt: leave the old bare Enter alone
+    j = norm.rfind(want)
+    return not (j and norm[j - 1] in POINTERS)
 
 
 def main() -> int:
@@ -110,10 +122,10 @@ def main() -> int:
                 logged[0] += len(data)
             buf[0] = (buf[0] + data)[-8000:]
             norm = ANSI.sub("", buf[0]).lower().replace(" ", "").replace("\n", "").replace("\r", "")
-            if "trust" in norm and trust_sent[0] < 3 and time.time() - last[0] > 1.5:
+            if _wanted_option(norm) and trust_sent[0] < 6 and time.time() - last[0] > 1.5:
                 try:
                     time.sleep(0.5)  # let the picker finish mounting
-                    if _trust_needs_down(norm):
+                    if _needs_down(norm):
                         proc.write("\x1b[B")  # move to "Yes, I trust this folder"
                         time.sleep(0.5)
                     proc.write("\r")

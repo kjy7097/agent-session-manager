@@ -33,8 +33,10 @@ from . import common
 
 IS_WIN = os.name == "nt"
 
-# Entries an account borrows from the real ~/.claude instead of owning.
-SHARED = ("projects", "sessions", "settings.json", "skills")
+# Entries an account borrows from the real ~/.claude instead of owning. CLAUDE.md
+# is the user's own instructions, not something that belongs to a login, and
+# without it a second account would quietly run without them.
+SHARED = ("projects", "sessions", "settings.json", "skills", "CLAUDE.md")
 
 _logins: dict[str, dict] = {}     # token -> {proc, name, url, started, output}
 _lock = threading.Lock()

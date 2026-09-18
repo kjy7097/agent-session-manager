@@ -24,31 +24,43 @@ import sys
 import time
 
 ANSI = re.compile(rb"\x1b\[[0-9;?]*[A-Za-z]")
-TRUST_NEEDLE = b"trustthisfolder"  # normalized (no spaces/newlines, lowercase)
+# Any prompt we know how to answer, as it appears in the normalized screen.
+PROMPT_NEEDLES = (b"quicksafetycheck", b"allowexternalclaude.mdfileimports")
 READY_NEEDLES = (b"remotecontrol", b"claude.ai/code")
 # The picker's highlight marker: ❯ on POSIX, plain ">" on a Windows console.
 POINTERS = ("\u276f", "\u203a", "\u25b6", ">")
-NO_OPT = "no,exit"
-YES_OPT = "yes,itrustthisfolder"
+# Prompts claude puts in front of a session that nobody is sitting at. Each is
+# (text that identifies the prompt, the option we answer with). Answering the
+# folder-trust prompt already commits to running here, so the import prompt —
+# which only asks whether the CLAUDE.md files of that same trusted folder may
+# be read — is not a wider decision than the one already made.
+PROMPTS = (
+    ("quicksafetycheck", "yes,itrustthisfolder"),
+    ("allowexternalclaude.mdfileimports", "yes,allowexternalimports"),
+)
 
 
-def _trust_needs_down(norm: str) -> bool:
-    """Newer claude (>= 2.1.25x) highlights "No, exit" first in the trust dialog,
-    so a bare Enter quits. Return True when we must press Down before Enter.
+def _wanted_option(norm):
+    """The option to land on, for whichever known prompt is on screen."""
+    for needle, want in PROMPTS:
+        if needle in norm and norm.rfind(want) != -1:
+            return want
+    return None
 
-    `norm` is the screen text lowercased with spaces/newlines stripped. We look at
-    the character immediately before each option rather than the last pointer on
-    screen, because escape-sequence leftovers can strand a stray ">".
+
+def _needs_down(norm):
+    """Whether to move the highlight before pressing Enter.
+
+    Newer claude highlights the refusing option first, so a bare Enter quits or
+    declines. The marker is read from the character immediately before the
+    option label rather than the last marker on screen, because
+    escape-sequence leftovers can strand a stray ">".
     """
-    i = norm.rfind(NO_OPT)
-    j = norm.rfind(YES_OPT)
-    if i == -1 or j == -1:
-        return False  # not the newer two-option dialog: keep the old bare Enter
-    if i and norm[i - 1] in POINTERS:
-        return True
-    if j and norm[j - 1] in POINTERS:
-        return False
-    return True  # dialog is up but no marker seen: newer claude defaults to "No"
+    want = _wanted_option(norm)
+    if want is None:
+        return False          # unknown prompt: leave the old bare Enter alone
+    j = norm.rfind(want)
+    return not (j and norm[j - 1] in POINTERS)
 
 
 def main() -> int:
@@ -121,13 +133,13 @@ def main() -> int:
             buf += data
             norm = ANSI.sub(b"", buf).lower().replace(b" ", b"").replace(b"\n", b"")
             if (
-                TRUST_NEEDLE in norm
-                and trust_sent < 3
+                any(n in norm for n in PROMPT_NEEDLES)
+                and trust_sent < 6
                 and time.monotonic() - last_trust > 1.5
             ):
                 try:
                     time.sleep(0.5)  # let the picker finish mounting
-                    if _trust_needs_down(norm.decode("utf-8", "replace")):
+                    if _needs_down(norm.decode("utf-8", "replace")):
                         os.write(fd, b"\x1b[B")  # move to "Yes, I trust this folder"
                         time.sleep(0.5)
                     os.write(fd, b"\r")
