@@ -9,11 +9,11 @@
           --muted:#8b949e; --accent:#d97757; --accent2:#388bfd; --ok:#3fb950; }
   * { box-sizing:border-box; }
   body { margin:0; font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:var(--bg); color:var(--fg); }
-  header { padding:12px 18px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:12px; }
+  header { padding:12px 18px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
   header h1 { font-size:15px; margin:0; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .sp { margin-left:auto; }
   .layout { display:grid; grid-template-columns:340px 1fr; height:calc(100vh - 53px); }
-  .sidebar { border-right:1px solid var(--border); overflow:auto; padding:10px; }
+  .sidebar { border-right:1px solid var(--border); overflow-y:auto; overflow-x:hidden; padding:10px; }
   .main { overflow:auto; padding:18px 22px; }
   button { background:var(--panel); color:var(--fg); border:1px solid var(--border); padding:7px 12px; border-radius:6px; cursor:pointer; font-size:13px; white-space:nowrap; }
   button:hover { border-color:var(--accent); }
@@ -34,8 +34,14 @@
   .mgrbar .iconbtn:hover { border-color:var(--accent); color:var(--fg); }
   .mgrbar .iconbtn.del:hover { border-color:#f85149; color:#f85149; }
   .nodegrp { margin-bottom:14px; }
-  .nodehead { display:flex; align-items:center; gap:8px; padding:7px 6px 7px 9px; border-radius:7px; font-weight:600; }
-  .nodehead .nm { flex:1; }
+  .nodehead { display:flex; align-items:center; gap:6px; padding:7px 6px 7px 9px; border-radius:7px; font-weight:600; }
+  /* the row carries a name, two or three tags and up to four buttons, in a
+     column the user can make narrow: the name gives way first, the tags shrink
+     to an ellipsis, and the buttons keep their size so they stay clickable */
+  .nodehead .nm { flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .nodehead .badge { flex:0 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .nodehead .badge.acct { max-width:120px; }
+  .nodehead .iconbtn { flex:0 0 auto; padding:3px 5px; }
   .nodefolders { margin:4px 0 0 10px; padding-left:8px; border-left:1px solid var(--border); }
   .nodefolders:not(.expanded) .folder.hidden { display:none; }
   /* folder search: reveal collapsed rows, drop non-matches and empty machines */
@@ -116,10 +122,16 @@
   #toast { position:fixed; bottom:18px; left:50%; transform:translateX(-50%); background:var(--panel); border:1px solid var(--border); padding:10px 16px; border-radius:8px; opacity:0; transition:opacity .2s; pointer-events:none; max-width:80vw; z-index:20; }
   #toast.show { opacity:1; }
   @media (max-width:760px){
-    header { padding:10px 10px; gap:6px; }
-    header h1 { font-size:13px; }
+    /* the header holds a title, four controls and two icon buttons; at this
+       width they have to be allowed onto a second line rather than pushing the
+       page sideways */
+    header { padding:10px 10px; gap:6px; row-gap:8px; }
+    header h1 { font-size:13px; flex:1 1 auto; min-width:0; }
     header button { padding:6px 8px; font-size:12px; }
-    .layout { grid-template-columns:1fr; height:calc(100vh - 53px); }
+    header select { max-width:88px; font-size:11px; }
+    .sp { margin-left:0; flex-basis:100%; height:0; }   /* break the line here */
+    .layout { height:auto; min-height:calc(100vh - 53px); }
+    .layout { grid-template-columns:1fr; }
     .sidebar { display:none; border-right:none; }
     .main { display:none; }
     body.nav .sidebar { display:block; }
