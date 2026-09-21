@@ -48,6 +48,7 @@
     line-height:1; padding:4px 6px; display:none; }
   .fsearch.on .clear { display:block; }
   .fsearch .searchbox { padding-right:30px; }
+  .badge.live.stopping { color:var(--muted); border-color:var(--border); }
   .gpath { font-size:11px; color:var(--muted); margin:10px 0 -6px 2px; word-break:break-all; }
   .ghead { font-size:13px; font-weight:600; color:var(--muted); letter-spacing:.02em;
     margin-top:14px; padding:7px 8px; border-radius:7px; display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
@@ -349,7 +350,7 @@ const EN={
 "Codex 세션 생성됨":"Codex session created","⌨ 터미널":"⌨ Terminal","📋 터미널 명령 복사됨 — 터미널에 붙여넣으세요":"📋 Terminal command copied — paste it into your terminal","아래 명령을 복사해 터미널에서 실행:":"Copy this command and run it in your terminal:","터미널에서 이어가기 (SSH 명령 복사)":"Continue in a terminal (copy SSH command)","터미널에서 인터랙티브로 이어가기":"Continue interactively in a terminal","열기":"Open","👁 미리보기":"👁 Preview","Fork":"Fork","삭제":"Delete","■ 종료":"■ Stop","💬 대화":"💬 Chat",
 "📌 고정":"📌 Pin","📌 고정됨":"📌 Pinned","상단 고정":"Pin to top","상단 고정 해제":"Unpin from top",
 "폴더 없음 — ＋로 추가":"No folders — add with ＋",
- "🔎 폴더 검색 · Enter로 전체 세션 검색":"🔎 Filter folders · Enter to search all sessions","지우기":"Clear","🔎 전체 세션 검색":"🔎 Search all sessions","닫기":"Close","검색 중…":"Searching…","머신":"machines","건":"","일부만":"partial","결과가 많아 일부만 표시합니다":"Too many matches — showing the most recent","검색할 수 있는 머신이 없습니다":"No reachable machines","클로드 계정":"Claude accounts","클로드 계정 전환":"Switch Claude account","로그인 안 됨":"not signed in","사용 중":"in use","사용":"Use","로그인":"Sign in","다시 로그인":"Sign in again","머신 기본":"machine default","계정 없음":"No accounts","새 계정 이름":"New account name","머신":"Machine","＋ 추가":"＋ Add","이름을 입력하세요":"Enter a name","만드는 중…":"Creating…","계정 전환됨: ":"Switched to: ","이 계정을 삭제할까요? 세션 기록은 공유라 지워지지 않습니다.":"Delete this account? Session history is shared and is not deleted.","로그인 주소를 받는 중…":"Getting the sign-in link…","아래 주소를 열어 로그인한 뒤, 받은 코드를 붙여넣으세요.":"Open the link, sign in, then paste the code you get back.","여기에 코드 붙여넣기":"Paste the code here","확인":"Submit","브라우저에서 로그인한 뒤 코드를 붙여넣으세요":"Sign in in the browser, then paste the code","코드를 붙여넣으세요":"Paste the code","확인 중…":"Checking…","로그인 완료":"Signed in","모두 펼치기":"Expand all","모두 접기":"Collapse all","노드의 폴더를 고르세요.":"Pick a folder.","📌 추가됨":"📌 added","더보기":"Show more","접기":"Show less",
+ "🔎 폴더 검색 · Enter로 전체 세션 검색":"🔎 Filter folders · Enter to search all sessions","지우기":"Clear","🔎 전체 세션 검색":"🔎 Search all sessions","닫기":"Close","검색 중…":"Searching…","머신":"machines","건":"","일부만":"partial","결과가 많아 일부만 표시합니다":"Too many matches — showing the most recent","검색할 수 있는 머신이 없습니다":"No reachable machines","종료 중…":"stopping…","이 머신 새로고침":"Refresh this machine","실행 중인 이 세션을 종료할까요?":"Stop this running session?","종료 실패: ":"Could not stop: ","클로드 계정":"Claude accounts","클로드 계정 전환":"Switch Claude account","로그인 안 됨":"not signed in","사용 중":"in use","사용":"Use","로그인":"Sign in","다시 로그인":"Sign in again","머신 기본":"machine default","계정 없음":"No accounts","새 계정 이름":"New account name","머신":"Machine","＋ 추가":"＋ Add","이름을 입력하세요":"Enter a name","만드는 중…":"Creating…","계정 전환됨: ":"Switched to: ","이 계정을 삭제할까요? 세션 기록은 공유라 지워지지 않습니다.":"Delete this account? Session history is shared and is not deleted.","로그인 주소를 받는 중…":"Getting the sign-in link…","아래 주소를 열어 로그인한 뒤, 받은 코드를 붙여넣으세요.":"Open the link, sign in, then paste the code you get back.","여기에 코드 붙여넣기":"Paste the code here","확인":"Submit","브라우저에서 로그인한 뒤 코드를 붙여넣으세요":"Sign in in the browser, then paste the code","코드를 붙여넣으세요":"Paste the code","확인 중…":"Checking…","로그인 완료":"Signed in","모두 펼치기":"Expand all","모두 접기":"Collapse all","노드의 폴더를 고르세요.":"Pick a folder.","📌 추가됨":"📌 added","더보기":"Show more","접기":"Show less",
 "이 폴더 세션 전체 삭제":"Delete all sessions in this folder","목록에서 제거(핀 해제)":"Remove from list (unpin)","머신 제거":"Remove machine",
 "에이전트 없음":"no agent","개":"","　":" ",
 "이 세션을 삭제할까요? 되돌릴 수 없습니다.":"Delete this session? This cannot be undone.",
@@ -536,10 +537,11 @@ function renderSidebar(){
     const status = !m.online?`<span class="badge">offline</span>` : m.agentReady?`<span class="badge live">agent</span>`:`<span class="badge">에이전트 없음</span>`;
     const mj=JSON.stringify(m.id), nmj=JSON.stringify(m.name);
     const plus = (m.online&&m.agentReady)?`<button class="iconbtn" title="이 PC에 폴더 추가" onclick='openPicker(${mj})'>＋</button>`:"";
+    const ref = (m.online&&m.agentReady)?`<button class="iconbtn" title="${t("이 머신 새로고침")}" onclick='refreshMachine(${mj},this)'>↻</button>`:"";
     const ren = `<button class="iconbtn" title="이름 변경" onclick='renameMachine(${mj},${nmj})'>✎</button>`;
     const rem = m.is_self?"":`<button class="iconbtn del" title="머신 제거" onclick='removeMachine(${mj},${nmj})'>✕</button>`;
     const g=document.createElement("div"); g.className="nodegrp";
-    g.innerHTML=`<div class="nodehead"><span>${osIcon(m.os)}</span><span class="nm">${esc(m.name)}</span>${status}${plus}${ren}${rem}</div>
+    g.innerHTML=`<div class="nodehead"><span>${osIcon(m.os)}</span><span class="nm">${esc(m.name)}</span>${status}${ref}${plus}${ren}${rem}</div>
       <div class="nodefolders" id="nf-${cssid(m.id)}"></div>`;
     host.appendChild(g);
     if(m.online&&m.agentReady) loadNodeFolders(m);
@@ -612,6 +614,16 @@ function applyFolderFilter(){
     }
     none.textContent = t("검색 결과 없음");
   } else if(none){ none.remove(); }
+}
+
+// Re-read one machine's folders. Folder rows carry the live-session counts, so
+// this is also how you ask "what is actually running over there right now?"
+// without reloading the page and every other machine with it.
+async function refreshMachine(mid, btn){
+  const m = mById(mid); if(!m) return;
+  if(btn){ btn.disabled = true; btn.style.animation = "csmspin .8s linear infinite"; }
+  try{ await loadNodeFolders(m); }
+  finally{ if(btn){ btn.disabled = false; btn.style.animation = ""; } }
 }
 
 function toggleMore(btn){ const nf=btn.parentNode; const ex=nf.classList.toggle("expanded"); btn.textContent= ex?t("접기"):(t("더보기")+" ("+btn.dataset.n+")"); }
@@ -844,7 +856,7 @@ function sessionRow(s, mid, cwd){
     const snip=s.snippet?`<div class="snippet">…${esc(s.snippet)}</div>`:"";
     const pinBtn=`<button class="ghost${s._top?" on":""}" onclick='toggleTopSession(${mj},${cj},${sj})' title="${s._top?t("상단 고정 해제"):t("상단 고정")}">${s._top?t("📌 고정됨"):t("📌 고정")}</button>`;
     if(isCx){
-      return `<div class="session"><div class="row1"><span class="title">${s._top?"📌 ":""}${esc(s.title)}</span>${badges}</div>
+      return `<div class="session" data-sid="${esc(s.session_id)}"><div class="row1"><span class="title">${s._top?"📌 ":""}${esc(s.title)}</span>${badges}</div>
         <div class="sub">${esc(s.first_prompt||"")}</div>
         <div class="sub">${s.msg_count}${t("개 메시지")} · ${when} · <code>${s.session_id.slice(0,8)}</code></div>${snip}
         <div class="actions">
@@ -852,7 +864,7 @@ function sessionRow(s, mid, cwd){
           <button class="primary" onclick='openTerm(${mj},${cj},${sj})' title="${t("터미널에서 인터랙티브로 이어가기")}">${t("⌨ 터미널")}</button>
           ${pinBtn}<button class="ghost danger" onclick='del(${mj},${cj},${sj},false,"codex")'>${t("삭제")}</button></div></div>`;
     }
-    return `<div class="session"><div class="row1"><span class="title">${s._top?"📌 ":""}${esc(s.title)}</span>${badges}</div>
+    return `<div class="session" data-sid="${esc(s.session_id)}"><div class="row1"><span class="title">${s._top?"📌 ":""}${esc(s.title)}</span>${badges}</div>
       <div class="sub">${esc(s.first_prompt||"")}</div>
       <div class="sub">${s.msg_count}${t("개 메시지")} · ${when} · ${esc(s.git_branch||"")} · <code>${s.session_id.slice(0,8)}</code></div>${snip}
       <div class="actions">${openBtn}
@@ -1099,10 +1111,47 @@ async function doLaunch(mid,body){
   }catch(e){ toast(t("오류: ")+e.message); }
   finally{ hideLoading(); }
 }
+// Stopping is a signal, not a wait: the agent returns as soon as it has sent it,
+// but claude takes a moment to actually go. Mark the card immediately so the
+// click has an answer, then settle the lists in the background — nothing here
+// holds up the next thing the user wants to do.
+function markStopping(sessionId, on){
+  const card = document.querySelector(`.session[data-sid="${CSS.escape(sessionId)}"]`);
+  if(!card) return;
+  card.querySelectorAll("button").forEach(b => b.disabled = on);
+  card.style.opacity = on ? ".6" : "";
+  const live = card.querySelector(".badge.live");
+  if(live && on){ live.textContent = t("종료 중…"); live.classList.add("stopping"); }
+}
+
+async function settleAfterStop(mid, cwd, sessionId){
+  for(let i = 0; i < 15; i++){
+    await sleep(1000);
+    let rows;
+    try{ rows = (await apiM(mid, `sessions?cwd=${encodeURIComponent(cwd)}`)).sessions; }
+    catch(e){ continue; }
+    const row = (rows || []).find(x => x.session_id === sessionId);
+    if(!row || !row.is_live) break;
+  }
+  const m = mById(mid);
+  if(m) loadNodeFolders(m);                 // the machine's live count in the sidebar
+  // only redraw the list if it is still the one on screen
+  if(FOLDER === cwd && FOLDER_MACHINE === mid){
+    const q = $("#ssearch");
+    loadSessionList(mid, cwd, q ? q.value : "");
+  }
+}
+
 async function stopSession(mid,cwd,sessionId){
-  if(!await uiConfirm("실행 중인 이 세션을 종료할까요?")) return;
-  try{ const r=await apiM(mid,"stop",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sessionId})});
-    if(r.ok){ toast("종료됨"); setTimeout(()=>openFolder(mid,cwd),1200); } else toast("종료 실패: "+(r.reason||"")); }catch(e){ toast(t("오류: ")+e.message); }
+  if(!await uiConfirm(t("실행 중인 이 세션을 종료할까요?"))) return;
+  markStopping(sessionId, true);
+  try{
+    const r = await apiM(mid,"stop",{method:"POST",headers:{"Content-Type":"application/json"},
+                                     body:JSON.stringify({sessionId})});
+    if(!r.ok){ toast(t("종료 실패: ")+(r.reason||"")); markStopping(sessionId, false); return; }
+  }catch(e){ toast(t("오류: ")+e.message); markStopping(sessionId, false); return; }
+  toast(t("종료 중…"));
+  settleAfterStop(mid, cwd, sessionId);     // deliberately not awaited
 }
 async function delFolder(mid,cwd,count){
   if(!await uiConfirm(`이 폴더의 세션 ${count}개를 모두 삭제할까요?\n${cwd}\n실행 중(live)은 건너뜁니다. 되돌릴 수 없습니다.`)) return;
