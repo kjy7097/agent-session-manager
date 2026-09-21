@@ -46,6 +46,31 @@ def session_names() -> dict:
         return {}
 
 
+def _accounts_file() -> Path:
+    return claude_home() / ".csm-session-accounts.json"
+
+
+def session_accounts() -> dict:
+    """{sessionId: account name} for sessions this manager launched. Claude has
+    no idea which of our accounts it was started under, so we record it at
+    launch; "" means the machine's own login."""
+    try:
+        return json.loads(_accounts_file().read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def set_session_account(session_id: str, account: str) -> None:
+    d = session_accounts()
+    if d.get(session_id) == account:
+        return
+    d[session_id] = account
+    try:
+        _accounts_file().write_text(json.dumps(d), encoding="utf-8")
+    except OSError:
+        pass
+
+
 def set_session_name(session_id: str, name: str) -> None:
     if not session_id or not name:
         return
@@ -292,6 +317,7 @@ def list_sessions_for_cwd(cwd: str) -> list[dict]:
     unknown_dir = cwd[len("(unknown:"):-1] if cwd.startswith("(unknown:") and cwd.endswith(")") else None
     live = {s["session_id"]: s for s in live_sessions() if s.get("session_id")}
     names = session_names()  # user-chosen names {sessionId: name}
+    accts = session_accounts()
     rows = []
     seen = set()
     pdir = projects_dir()
@@ -307,6 +333,7 @@ def list_sessions_for_cwd(cwd: str) -> list[dict]:
                 elif fc is None or _realpath(fc) != target:
                     continue
                 row = parse_session(f)
+                row["account"] = accts.get(row["session_id"])
                 ls = live.get(row["session_id"])
                 row["is_live"] = ls is not None
                 if ls and ls.get("bridge_session_id"):
@@ -506,6 +533,7 @@ def search_all_sessions(query: str, limit: int = 60,
         if not by_name and not _file_has(f, needles):
             continue
         row = parse_session(f, find=lowq)
+        row["account"] = session_accounts().get(row["session_id"])
         ls = live.get(row["session_id"])
         row["is_live"] = ls is not None
         if ls and ls.get("bridge_session_id"):

@@ -49,6 +49,8 @@
   .fsearch.on .clear { display:block; }
   .fsearch .searchbox { padding-right:30px; }
   .badge.live.stopping { color:var(--muted); border-color:var(--border); }
+  .badge.acct { color:#b58cf0; border-color:#b58cf0; }
+  .badge.acct.stale { color:var(--accent2); border-color:var(--accent2); }
   .gpath { font-size:11px; color:var(--muted); margin:10px 0 -6px 2px; word-break:break-all; }
   .ghead { font-size:13px; font-weight:600; color:var(--muted); letter-spacing:.02em;
     margin-top:14px; padding:7px 8px; border-radius:7px; display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
@@ -350,7 +352,7 @@ const EN={
 "Codex 세션 생성됨":"Codex session created","⌨ 터미널":"⌨ Terminal","📋 터미널 명령 복사됨 — 터미널에 붙여넣으세요":"📋 Terminal command copied — paste it into your terminal","아래 명령을 복사해 터미널에서 실행:":"Copy this command and run it in your terminal:","터미널에서 이어가기 (SSH 명령 복사)":"Continue in a terminal (copy SSH command)","터미널에서 인터랙티브로 이어가기":"Continue interactively in a terminal","열기":"Open","👁 미리보기":"👁 Preview","Fork":"Fork","삭제":"Delete","■ 종료":"■ Stop","💬 대화":"💬 Chat",
 "📌 고정":"📌 Pin","📌 고정됨":"📌 Pinned","상단 고정":"Pin to top","상단 고정 해제":"Unpin from top",
 "폴더 없음 — ＋로 추가":"No folders — add with ＋",
- "🔎 폴더 검색 · Enter로 전체 세션 검색":"🔎 Filter folders · Enter to search all sessions","지우기":"Clear","🔎 전체 세션 검색":"🔎 Search all sessions","닫기":"Close","검색 중…":"Searching…","머신":"machines","건":"","일부만":"partial","결과가 많아 일부만 표시합니다":"Too many matches — showing the most recent","검색할 수 있는 머신이 없습니다":"No reachable machines","종료 중…":"stopping…","이 머신 새로고침":"Refresh this machine","실행 중인 이 세션을 종료할까요?":"Stop this running session?","종료 실패: ":"Could not stop: ","클로드 계정":"Claude accounts","클로드 계정 전환":"Switch Claude account","로그인 안 됨":"not signed in","사용 중":"in use","사용":"Use","로그인":"Sign in","다시 로그인":"Sign in again","머신 기본":"machine default","계정 없음":"No accounts","새 계정 이름":"New account name","머신":"Machine","＋ 추가":"＋ Add","이름을 입력하세요":"Enter a name","만드는 중…":"Creating…","계정 전환됨: ":"Switched to: ","이 계정을 삭제할까요? 세션 기록은 공유라 지워지지 않습니다.":"Delete this account? Session history is shared and is not deleted.","로그인 주소를 받는 중…":"Getting the sign-in link…","아래 주소를 열어 로그인한 뒤, 받은 코드를 붙여넣으세요.":"Open the link, sign in, then paste the code you get back.","여기에 코드 붙여넣기":"Paste the code here","확인":"Submit","브라우저에서 로그인한 뒤 코드를 붙여넣으세요":"Sign in in the browser, then paste the code","코드를 붙여넣으세요":"Paste the code","확인 중…":"Checking…","로그인 완료":"Signed in","모두 펼치기":"Expand all","모두 접기":"Collapse all","노드의 폴더를 고르세요.":"Pick a folder.","📌 추가됨":"📌 added","더보기":"Show more","접기":"Show less",
+ "🔎 폴더 검색 · Enter로 전체 세션 검색":"🔎 Filter folders · Enter to search all sessions","지우기":"Clear","🔎 전체 세션 검색":"🔎 Search all sessions","닫기":"Close","검색 중…":"Searching…","머신":"machines","건":"","일부만":"partial","결과가 많아 일부만 표시합니다":"Too many matches — showing the most recent","검색할 수 있는 머신이 없습니다":"No reachable machines","종료 중…":"stopping…","이 머신 새로고침":"Refresh this machine","이 머신이 쓰는 계정":"Account this machine uses","이 세션의 계정":"This session's account","이 세션은 다른 계정으로 실행됐습니다":"Started under a different account","종료하고 현재 계정으로 다시 열기":"Stop and reopen under the current account","(으)로 전환":"","이 세션을 종료하고 현재 계정으로 다시 열까요?":"Stop this session and reopen it under the current account?","실행 중인 이 세션을 종료할까요?":"Stop this running session?","종료 실패: ":"Could not stop: ","클로드 계정":"Claude accounts","클로드 계정 전환":"Switch Claude account","로그인 안 됨":"not signed in","사용 중":"in use","사용":"Use","로그인":"Sign in","다시 로그인":"Sign in again","머신 기본":"machine default","계정 없음":"No accounts","새 계정 이름":"New account name","머신":"Machine","＋ 추가":"＋ Add","이름을 입력하세요":"Enter a name","만드는 중…":"Creating…","계정 전환됨: ":"Switched to: ","이 계정을 삭제할까요? 세션 기록은 공유라 지워지지 않습니다.":"Delete this account? Session history is shared and is not deleted.","로그인 주소를 받는 중…":"Getting the sign-in link…","아래 주소를 열어 로그인한 뒤, 받은 코드를 붙여넣으세요.":"Open the link, sign in, then paste the code you get back.","여기에 코드 붙여넣기":"Paste the code here","확인":"Submit","브라우저에서 로그인한 뒤 코드를 붙여넣으세요":"Sign in in the browser, then paste the code","코드를 붙여넣으세요":"Paste the code","확인 중…":"Checking…","로그인 완료":"Signed in","모두 펼치기":"Expand all","모두 접기":"Collapse all","노드의 폴더를 고르세요.":"Pick a folder.","📌 추가됨":"📌 added","더보기":"Show more","접기":"Show less",
 "이 폴더 세션 전체 삭제":"Delete all sessions in this folder","목록에서 제거(핀 해제)":"Remove from list (unpin)","머신 제거":"Remove machine",
 "에이전트 없음":"no agent","개":"","　":" ",
 "이 세션을 삭제할까요? 되돌릴 수 없습니다.":"Delete this session? This cannot be undone.",
@@ -535,13 +537,17 @@ function renderSidebar(){
   const host=$("#nodes"); host.innerHTML="";
   for(const m of MACHINES){
     const status = !m.online?`<span class="badge">offline</span>` : m.agentReady?`<span class="badge live">agent</span>`:`<span class="badge">에이전트 없음</span>`;
+    // Shown even when it is the machine's own login: "which account is this
+    // machine on" should never be answered by an absence.
+    const acctTag = (m.online&&m.agentReady&&ACTIVE_ACCT[m.id]!==undefined)
+      ? `<span class="badge acct" title="${t("이 머신이 쓰는 계정")}">👤 ${esc(acctLabel(ACTIVE_ACCT[m.id]))}</span>` : "";
     const mj=JSON.stringify(m.id), nmj=JSON.stringify(m.name);
     const plus = (m.online&&m.agentReady)?`<button class="iconbtn" title="이 PC에 폴더 추가" onclick='openPicker(${mj})'>＋</button>`:"";
     const ref = (m.online&&m.agentReady)?`<button class="iconbtn" title="${t("이 머신 새로고침")}" onclick='refreshMachine(${mj},this)'>↻</button>`:"";
     const ren = `<button class="iconbtn" title="이름 변경" onclick='renameMachine(${mj},${nmj})'>✎</button>`;
     const rem = m.is_self?"":`<button class="iconbtn del" title="머신 제거" onclick='removeMachine(${mj},${nmj})'>✕</button>`;
     const g=document.createElement("div"); g.className="nodegrp";
-    g.innerHTML=`<div class="nodehead"><span>${osIcon(m.os)}</span><span class="nm">${esc(m.name)}</span>${status}${ref}${plus}${ren}${rem}</div>
+    g.innerHTML=`<div class="nodehead"><span>${osIcon(m.os)}</span><span class="nm">${esc(m.name)}</span>${status}${acctTag}${ref}${plus}${ren}${rem}</div>
       <div class="nodefolders" id="nf-${cssid(m.id)}"></div>`;
     host.appendChild(g);
     if(m.online&&m.agentReady) loadNodeFolders(m);
@@ -552,7 +558,8 @@ function renderSidebar(){
 async function loadNodeFolders(m){
   const nf=$("#nf-"+cssid(m.id));
   let folders=[];
-  try{ folders=(await apiM(m.id,"folders")).folders||[]; }
+  try{ const r=await apiM(m.id,"folders"); folders=r.folders||[];
+       if(r.activeAccount!==undefined) ACTIVE_ACCT[m.id]=r.activeAccount; }
   catch(e){ nf.innerHTML=`<div class="empty sm">${esc(e.message)}</div>`; return; }
   const have=new Set(folders.map(f=>f.cwd));
   for(const p of pins(m.id)) if(!have.has(p)) folders.push({cwd:p,session_count:0,last_activity:0});
@@ -576,6 +583,11 @@ async function loadNodeFolders(m){
   const rows=folders.map((f,i)=>row(f,i>=3 && !f.top));
   const more = folders.length>3 ? `<div class="more" data-n="${folders.length-3}" onclick="toggleMore(this)">${t("더보기")} (${folders.length-3})</div>` : "";
   nf.innerHTML=rows.join("")+more;
+  const head = nf.parentNode && nf.parentNode.querySelector(".nodehead");
+  if(head && ACTIVE_ACCT[m.id] !== undefined && !head.querySelector(".badge.acct")){
+    head.querySelector(".nm").insertAdjacentHTML("afterend",
+      `<span class="badge acct" title="${t("이 머신이 쓰는 계정")}">👤 ${esc(acctLabel(ACTIVE_ACCT[m.id]))}</span>`);
+  }
   if(FQ) applyFolderFilter();   // folders arrive per machine; keep the active filter
 }
 // Folder search — filters the already-loaded folder rows of every machine at once.
@@ -653,6 +665,10 @@ function renderFolderView(mid,cwd){
 // which one new sessions use. Which machine we are configuring follows the
 // folder currently selected in the sidebar, since the accounts live per machine.
 let ACCT_MID = "", ACCT_TOKEN = "";
+// Which account each machine is currently launching with. Filled in from the
+// folder and session responses, so no extra round trip just to label things.
+const ACTIVE_ACCT = {};
+const acctLabel = a => a ? a : t("머신 기본");
 function acctMachine(){ return ACCT_MID || FOLDER_MACHINE || (MACHINES.find(m=>m.online&&m.agentReady)||{}).id || ""; }
 function acctMsg(t_, bad){ const e=$("#acct-msg"); if(e){ e.textContent=t_||""; e.style.color = bad ? "var(--danger,#f85149)" : "var(--muted)"; } }
 
@@ -849,7 +865,17 @@ function sessionRow(s, mid, cwd){
     const isCx=s.agent==="codex";
     const agentBadge=isCx?`<span class="badge" style="color:#10a37f;border-color:#10a37f">🟢 codex</span>`:`<span class="badge" style="color:var(--accent);border-color:var(--accent)">🟧 claude</span>`;
     const modelBadge=s.model?`<span class="badge" style="color:#b58cf0;border-color:#b58cf0" title="${esc(s.model)}">🧠 ${esc(shortModel(s.model))}</span>`:"";
-    const badges=agentBadge+modelBadge+`<span class="badge node">${osIcon(m.os)} ${esc(m.name)}</span>`+(s.is_remote_control?`<span class="badge rc">remote</span>`:"")+(s.is_live?`<span class="badge live">live</span>`:"");
+    // The account a session was started under is recorded at launch; older
+    // sessions have none, and a session on the machine's own login is the
+    // common case — neither is worth a badge, so only show one when it differs
+    // from what the machine is launching with now.
+    const cur = ACTIVE_ACCT[mid];
+    const stale = !isCx && s.account !== undefined && s.account !== null
+                  && cur !== undefined && s.account !== cur;
+    const acctBadge = (!isCx && s.account)
+      ? `<span class="badge acct${stale?" stale":""}" title="${stale?t("이 세션은 다른 계정으로 실행됐습니다"):t("이 세션의 계정")}">👤 ${esc(s.account)}</span>`
+      : (stale ? `<span class="badge acct stale" title="${t("이 세션은 다른 계정으로 실행됐습니다")}">👤 ${esc(t("머신 기본"))}</span>` : "");
+    const badges=agentBadge+modelBadge+acctBadge+`<span class="badge node">${osIcon(m.os)} ${esc(m.name)}</span>`+(s.is_remote_control?`<span class="badge rc">remote</span>`:"")+(s.is_live?`<span class="badge live">live</span>`:"");
     const sj=JSON.stringify(s.session_id);
     const openBtn=s.is_live&&s.bridge_url?`<button class="primary" onclick='window.open(${JSON.stringify(s.bridge_url)},"_blank")'>${t("열기")}</button>`:"";
     const stopBtn=s.is_live?`<button class="danger" onclick='stopSession(${mj},${cj},${sj})'>${t("■ 종료")}</button>`:"";
@@ -868,6 +894,7 @@ function sessionRow(s, mid, cwd){
       <div class="sub">${esc(s.first_prompt||"")}</div>
       <div class="sub">${s.msg_count}${t("개 메시지")} · ${when} · ${esc(s.git_branch||"")} · <code>${s.session_id.slice(0,8)}</code></div>${snip}
       <div class="actions">${openBtn}
+        ${stale?`<button class="ghost" title="${t("종료하고 현재 계정으로 다시 열기")}" onclick='switchAccount(${mj},${cj},${sj})'>👤 ${esc(acctLabel(cur))}${t("(으)로 전환")}</button>`:""}
         <button onclick='preview(${mj},${cj},${sj})'>${t("👁 미리보기")}</button>
         <button onclick='resume(${mj},${cj},${sj},false)'>${t("이어가기")}</button>
         <button class="ghost" onclick='resume(${mj},${cj},${sj},true)'>Fork</button>
@@ -882,7 +909,9 @@ async function loadSessionList(mid,cwd,query){
   let sessions;
   try{
     const path=query?`search?cwd=${encodeURIComponent(cwd)}&q=${encodeURIComponent(query)}`:`sessions?cwd=${encodeURIComponent(cwd)}`;
-    sessions=(await apiM(mid,path)).sessions;
+    const resp=await apiM(mid,path);
+    sessions=resp.sessions;
+    if(resp.activeAccount!==undefined) ACTIVE_ACCT[mid]=resp.activeAccount;
   }catch(e){ if(seq===searchSeq) sl.innerHTML=`<div class="empty">${esc(e.message)}</div>`; return; }
   if(seq!==searchSeq) return; // a newer query superseded this one
   const m=mById(mid), mj=JSON.stringify(mid), cj=JSON.stringify(cwd);
@@ -1140,6 +1169,30 @@ async function settleAfterStop(mid, cwd, sessionId){
     const q = $("#ssearch");
     loadSessionList(mid, cwd, q ? q.value : "");
   }
+}
+
+// Move a session onto the account the machine is launching with now. Claude
+// cannot change the login of a running process, so the only honest way is to
+// stop it and resume the same transcript under the new one — which is exactly
+// what resume already does, the conversation being on disk either way.
+async function switchAccount(mid,cwd,sessionId){
+  const cur = ACTIVE_ACCT[mid];
+  if(!await uiConfirm(t("이 세션을 종료하고 현재 계정으로 다시 열까요?") + "\n\n👤 " + acctLabel(cur))) return;
+  markStopping(sessionId, true);
+  try{
+    const r = await apiM(mid,"stop",{method:"POST",headers:{"Content-Type":"application/json"},
+                                     body:JSON.stringify({sessionId})});
+    if(!r.ok && r.reason !== "not live") throw new Error(r.reason || "stop failed");
+  }catch(e){ toast(t("오류: ")+e.message); markStopping(sessionId, false); return; }
+  for(let i = 0; i < 15; i++){          // resume refuses while the old one holds the session
+    await sleep(1000);
+    try{
+      const rows = (await apiM(mid, `sessions?cwd=${encodeURIComponent(cwd)}`)).sessions || [];
+      const row = rows.find(x => x.session_id === sessionId);
+      if(!row || !row.is_live) break;
+    }catch(e){ /* keep waiting */ }
+  }
+  resume(mid, cwd, sessionId, false);   // picks up the machine's current account
 }
 
 async function stopSession(mid,cwd,sessionId){

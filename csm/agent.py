@@ -77,7 +77,7 @@ class Agent:
                 cf["codex_count"] = cf["session_count"]
                 rows.append(cf)
                 by_cwd[cf["cwd"]] = cf
-        return {"folders": rows}
+        return {"folders": rows, "activeAccount": accounts.active()}
 
     def sessions(self, cwd: str) -> dict:
         rows = common.list_sessions_for_cwd(cwd)
@@ -85,7 +85,7 @@ class Agent:
             r.setdefault("agent", "claude")
         rows += codex.list_sessions_for_cwd(cwd)
         rows.sort(key=lambda r: r.get("last_activity") or 0, reverse=True)
-        return {"sessions": rows}
+        return {"sessions": rows, "activeAccount": accounts.active()}
 
     def browse(self, path: str | None) -> dict:
         return common.browse_dir(path)
@@ -286,6 +286,7 @@ class Agent:
         subprocess.Popen(argv, **kw)
         rec = {
             "cwd": cwd,
+            "account": acct,
             "name": name,
             "user_name": user_name,
             "resume_id": resume_id,
@@ -338,6 +339,8 @@ class Agent:
             url = common.bridge_url(best["bridge_session_id"])
             if rec.get("user_name"):  # remember the user's chosen name for the list
                 common.set_session_name(best["session_id"], rec["user_name"])
+            # claude keeps no record of which of our accounts started it
+            common.set_session_account(best["session_id"], rec.get("account") or "")
             with _lock:
                 if token in _launches:
                     _launches[token].update(state="ready", url=url)
