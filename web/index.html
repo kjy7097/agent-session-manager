@@ -411,7 +411,7 @@ let DEFMODEL="", DEFEFFORT="high";   // effort: claude's own default runs hot fo
 function modelOpts(sel,cur){
   if(!sel) return;
   const d=t("기본값")+(DEFMODEL?` (${DEFMODEL})`:"");
-  sel.innerHTML=`<option value="">${d}</option><option value="fable">Fable 5.1</option><option value="opus">Opus 5</option><option value="sonnet">Sonnet 4.6</option><option value="haiku">Haiku 4.5</option>`;
+  sel.innerHTML=`<option value="">${d}</option><option value="fable">Fable 5.1</option><option value="opus">Opus 5.5</option><option value="sonnet">Sonnet 4.6</option><option value="haiku">Haiku 4.5</option>`;
   sel.value=cur||"";
 }
 const EFFORTS=["low","medium","high","xhigh","max"];
@@ -436,7 +436,7 @@ function fillModelSelects(){
   const ae=document.getElementById("ag-effort"); if(ae) ae.value=DEFEFFORT;
   const te=document.getElementById("tx-effort"); if(te) te.value=DEFEFFORT;
   const h=document.getElementById("defmodel");
-  if(h){ h.innerHTML=`<option value="">⚙ ${t("모델: 머신 설정")}</option><option value="fable">⚙ Fable 5.1</option><option value="opus">⚙ Opus 5</option><option value="sonnet">⚙ Sonnet 4.6</option><option value="haiku">⚙ Haiku 4.5</option>`; h.value=DEFMODEL; }
+  if(h){ h.innerHTML=`<option value="">⚙ ${t("모델: 머신 설정")}</option><option value="fable">⚙ Fable 5.1</option><option value="opus">⚙ Opus 5.5</option><option value="sonnet">⚙ Sonnet 4.6</option><option value="haiku">⚙ Haiku 4.5</option>`; h.value=DEFMODEL; }
   modelOpts(document.getElementById("ag-model"));
   modelOpts(document.getElementById("tx-model"));
 }
