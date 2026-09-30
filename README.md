@@ -38,6 +38,11 @@ all from one browser tab. No more SSHing into each box and typing
   transcript, or continue the conversation in the *other* agent (🟧 Claude ↔ 🟢 Codex).
 - **Browse by folder**, per machine; **search sessions** by title *and conversation
   content*; **preview** a transcript before resuming.
+- **Claude accounts** — keep several logins per machine and switch which one new
+  sessions use from the web UI; sign in there too, by opening the link and
+  pasting the code back. Session history stays shared across accounts. Each
+  machine shows its account in the sidebar, and a session opened under an
+  older account can be moved onto the current one in one click.
 - **Search everything** — one box in the sidebar. Typing filters the folder list
   of every machine at once; Enter searches *all sessions on all machines*, each
   agent scanning its own disk in parallel and returning only the hits, with a
@@ -159,7 +164,7 @@ bind the control plane to your VPN/LAN IP in `csm.config.json` (`control.host`).
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md). Current version: **0.6.0**.
+See [CHANGELOG.md](CHANGELOG.md). Current version: **0.7.0**.
 
 ## License
 

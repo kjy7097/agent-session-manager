@@ -5,6 +5,45 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-09-30
+
+### Added
+- **Claude accounts, switchable from the web UI.** Register several logins per
+  machine and pick which one new sessions use, without opening a console to run
+  `/login`. Sign-in happens in the dialog: it shows the OAuth link, you paste
+  the code back. An account is a directory handed to claude as
+  `CLAUDE_CONFIG_DIR`; session history (`projects/`, `sessions/`), settings,
+  skills and `CLAUDE.md` are linked back to the real `~/.claude`, so folder
+  lists, search and resume behave exactly as before and deleting an account
+  never deletes history. `.claude.json` is deliberately per account — it holds
+  `oauthAccount`.
+- **Which account is in use, everywhere it matters.** The sidebar labels each
+  machine with its account; a session started under a different account than
+  the machine uses now gets a badge and a one-click switch, which stops it and
+  resumes the same transcript under the current account.
+- **Per-machine refresh** in the sidebar, re-reading that machine's folders and
+  live counts without reloading the page.
+
+### Changed
+- **Stopping a session answers immediately.** The card dims and locks at once
+  and the lists settle in the background, including the sidebar's live counts,
+  which previously kept advertising sessions that had already exited.
+- **Search results fold per machine.** Machines with a few hits open on their
+  own, longer ones stay shut, with an expand/collapse-all toggle.
+- Model picker labels: Opus 5.5.
+
+### Fixed
+- **Search now finds a session by the title shown in the list.** A name given
+  in the UI is stored outside the transcript, so the scan never saw it; Korean
+  matching now ignores spacing; and multi-word non-ASCII terms could never
+  match an escaped record because the space was escaped too.
+- **A fresh account could not launch anything.** It hit claude's first-run
+  wizard, then an "allow external CLAUDE.md imports" prompt the launchers had no
+  answer for. New accounts inherit the machine's onboarding state and folder
+  trust, the launchers answer the import prompt, and accounts made before a
+  shared entry existed repair themselves on next use.
+- The sidebar and header no longer scroll sideways at narrow widths.
+
 ## [0.6.0] - 2026-09-11
 
 ### Added
