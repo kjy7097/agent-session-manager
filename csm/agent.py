@@ -44,6 +44,24 @@ _launches: dict[str, dict] = {}
 _lock = threading.Lock()
 
 
+def _launch_timeout(resume_id: str) -> int:
+    """How long a launch may take before we call it failed.
+
+    claude reads the whole transcript before it connects to claude.ai/code, so a
+    resume of a large one takes far longer than a fresh session: a 374MB
+    transcript (11k messages) blew through the old flat 45s and kept loading
+    after the UI had given up. Allow 45s plus about 1s per 4MB, capped at 5 min.
+    """
+    if not resume_id:
+        return 45
+    f = common.find_session_file(resume_id)
+    try:
+        mb = f.stat().st_size / 1048576 if f else 0
+    except OSError:
+        mb = 0
+    return int(min(300, 45 + mb / 4))
+
+
 class Agent:
     def __init__(self, cfg: dict):
         self.cfg = cfg
@@ -258,6 +276,28 @@ class Agent:
         resume_id = body.get("resumeId") or ""
         fork = "1" if body.get("fork") else "0"
         token = secrets.token_hex(8)
+        timeout = _launch_timeout(resume_id)
+
+        # Resuming a session that is already running must not start a second
+        # claude on it: two processes appending to one transcript can corrupt
+        # it, and the list (which dedupes by session id) would hide the extra
+        # one. This is exactly what a retry after a slow resume used to do —
+        # the first attempt was still loading a huge transcript when the UI
+        # gave up. So attach to what is there instead.
+        if resume_id and fork == "0":
+            for s in common.live_sessions():
+                if s.get("session_id") != resume_id:
+                    continue
+                rec = {"cwd": cwd, "account": None, "name": "", "user_name": "",
+                       "resume_id": resume_id, "fork": False, "attach": True,
+                       "started": time.time(), "timeout": timeout,
+                       "state": "spawning", "url": None, "error": None}
+                if s.get("bridge_session_id"):
+                    rec.update(state="ready", url=common.bridge_url(s["bridge_session_id"]))
+                with _lock:
+                    _launches[token] = rec
+                return {"token": token, "timeout": timeout, "attached": True}
+
         logf = open(self.log_dir / f"{token}.log", "wb")
         argv = [LAUNCH_EXE, str(LAUNCHER), cwd, name, resume_id, fork, self.claude_path]
         prompt = (body.get("prompt") or "").strip()   # optional seed (rewind / handoff)
@@ -290,6 +330,8 @@ class Agent:
             "name": name,
             "user_name": user_name,
             "resume_id": resume_id,
+            "fork": fork == "1",
+            "timeout": timeout,
             "started": time.time(),
             "state": "spawning",
             "url": None,
@@ -302,7 +344,7 @@ class Agent:
                 json.dumps(rec), encoding="utf-8")
         except OSError:
             pass
-        return {"token": token}
+        return {"token": token, "timeout": timeout}
 
     def launch_status(self, token: str) -> dict:
         with _lock:
@@ -322,13 +364,21 @@ class Agent:
             return {"error": "unknown token"}, 404
         if rec["state"] in ("ready", "failed"):
             return rec
-        # resolve: find a live pidfile for this cwd created after we started
+        # resolve. A plain resume keeps the session id, so wait for that exact
+        # session to get its bridge; a new session or a fork has no id yet, so
+        # take the newest bridged session in this folder that started after us.
         target = rec["cwd"]
         best = None
+        by_id = rec.get("resume_id") and not rec.get("fork")
         for s in common.live_sessions():
-            if not s.get("cwd") or not s.get("bridge_session_id"):
+            if not s.get("bridge_session_id"):
                 continue
-            if os.path.realpath(s["cwd"]) != target:
+            if by_id:
+                if s.get("session_id") == rec["resume_id"]:
+                    best = s
+                    break
+                continue
+            if not s.get("cwd") or os.path.realpath(s["cwd"]) != target:
                 continue
             started_s = (s.get("started_at") or 0) / 1000.0
             if started_s and started_s < rec["started"] - 5:
@@ -345,7 +395,7 @@ class Agent:
                 if token in _launches:
                     _launches[token].update(state="ready", url=url)
             rec.update(state="ready", url=url)
-        elif time.time() - rec["started"] > 45:
+        elif time.time() - rec["started"] > rec.get("timeout", 45):
             err = "timed out waiting for session (check auth / trust prompt)"
             with _lock:
                 if token in _launches:
