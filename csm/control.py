@@ -141,6 +141,8 @@ def _make_handler(cfg: dict):
                     ui["lang"] = b["lang"]
                 if "defaultModel" in b:
                     ui["defaultModel"] = str(b["defaultModel"] or "")[:40]
+                if "showCodex" in b:
+                    ui["showCodex"] = bool(b["showCodex"])
                 if "defaultEffort" in b:
                     v = str(b["defaultEffort"] or "")
                     if v in ("", "low", "medium", "high", "xhigh", "max"):

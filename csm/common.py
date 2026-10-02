@@ -102,7 +102,32 @@ def _iso(ms_or_str):
     return ms_or_str
 
 
+_parse_cache: dict = {}     # str(path) -> ((size, mtime_ns), row)
+
+
 def parse_session(path: Path, find: str = "") -> dict:
+    """Cached wrapper: a transcript is only re-read when it has changed.
+
+    Every folder click lists every session in it, and one transcript here is
+    539MB — a full second per click for a file that may not have changed in
+    days. Size plus mtime is enough to tell; a search (`find`) always reads,
+    since its snippet depends on the term."""
+    if find:
+        return _parse_session(path, find)
+    try:
+        st = path.stat()
+        key = (st.st_size, st.st_mtime_ns)
+    except OSError:
+        return _parse_session(path, find)
+    hit = _parse_cache.get(str(path))
+    if hit and hit[0] == key:
+        return dict(hit[1])
+    row = _parse_session(path, find)
+    _parse_cache[str(path)] = (key, dict(row))
+    return row
+
+
+def _parse_session(path: Path, find: str = "") -> dict:
     """Single-pass parse of one session jsonl into a picker row.
 
     Returns keys: session_id, cwd, title, first_prompt, last_activity (epoch

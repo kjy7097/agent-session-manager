@@ -407,7 +407,13 @@ function applyStatic(){
   document.querySelectorAll("[data-i18n-title]").forEach(e=>e.title=t(e.dataset.i18nTitle));
   const lb=document.getElementById("langbtn"); if(lb) lb.textContent=LANG==="ko"?"🌐 KO":"🌐 EN";
 }
-let DEFMODEL="", DEFEFFORT="high";   // effort: claude's own default runs hot for long sessions
+let DEFMODEL="", DEFEFFORT="high";
+// Codex sessions are hidden unless ui.showCodex is set: listing them makes the
+// agent read every rollout on the machine on every folder click, and here those
+// are mostly one-shot `codex exec` calls (482 of 518), not conversations.
+let SHOW_CODEX = false;
+const cx = () => SHOW_CODEX ? "" : "codex=0";
+const withCx = path => { const q = cx(); return q ? path + (path.includes("?") ? "&" : "?") + q : path; };   // effort: claude's own default runs hot for long sessions
 function modelOpts(sel,cur){
   if(!sel) return;
   const d=t("기본값")+(DEFMODEL?` (${DEFMODEL})`:"");
@@ -450,6 +456,7 @@ async function initLang(){
     if(r.ui&&r.ui.lang){LANG=r.ui.lang;localStorage.setItem("csm.lang",LANG);}
     if(r.ui&&r.ui.defaultModel!==undefined) DEFMODEL=r.ui.defaultModel||"";
     if(r.ui&&r.ui.defaultEffort!==undefined) DEFEFFORT=r.ui.defaultEffort||"";
+    if(r.ui&&r.ui.showCodex!==undefined) SHOW_CODEX=!!r.ui.showCodex;
   }catch(e){}
   applyStatic(); fillModelSelects();
 }
@@ -570,7 +577,7 @@ function renderSidebar(){
 async function loadNodeFolders(m){
   const nf=$("#nf-"+cssid(m.id));
   let folders=[];
-  try{ const r=await apiM(m.id,"folders"); folders=r.folders||[];
+  try{ const r=await apiM(m.id,withCx("folders")); folders=r.folders||[];
        if(r.activeAccount!==undefined) ACTIVE_ACCT[m.id]=r.activeAccount; }
   catch(e){ nf.innerHTML=`<div class="empty sm">${esc(e.message)}</div>`; return; }
   const have=new Set(folders.map(f=>f.cwd));
@@ -920,7 +927,7 @@ async function loadSessionList(mid,cwd,query){
   sl.innerHTML=`<div class="empty">${query?t("🔎 검색 중…"):t("불러오는 중…")}</div>`;
   let sessions;
   try{
-    const path=query?`search?cwd=${encodeURIComponent(cwd)}&q=${encodeURIComponent(query)}`:`sessions?cwd=${encodeURIComponent(cwd)}`;
+    const path=query?`search?cwd=${encodeURIComponent(cwd)}&q=${encodeURIComponent(query)}`:withCx(`sessions?cwd=${encodeURIComponent(cwd)}`);
     const resp=await apiM(mid,path);
     sessions=resp.sessions;
     if(resp.activeAccount!==undefined) ACTIVE_ACCT[mid]=resp.activeAccount;
@@ -1014,7 +1021,7 @@ async function txSend(){
 function showLoading(msg){ const m=$("#loading-msg"); if(m) m.textContent=msg||t("처리 중…"); const l=$("#loading"); if(l) l.style.display="flex"; }
 function hideLoading(){ const l=$("#loading"); if(l) l.style.display="none"; }
 let AG=null;
-function newSession(mid,cwd){ AG={mid,cwd}; const pe=$("#ag-path"); if(pe) pe.textContent="📁 "+cwd; agBack(); $("#agpick").classList.add("show"); }
+function newSession(mid,cwd){ AG={mid,cwd}; const pe=$("#ag-path"); if(pe) pe.textContent="📁 "+cwd; agBack(); $("#agpick").classList.add("show"); if(!SHOW_CODEX) agPick('claude'); }
 function agBack(){   // step 1로
   $("#ag-step1").style.display="flex"; $("#ag-step2").style.display="none";
   $("#ag-title").textContent=t("새 세션 — 에이전트 선택");
@@ -1179,11 +1186,10 @@ function markStopping(sessionId, on){
 async function settleAfterStop(mid, cwd, sessionId){
   for(let i = 0; i < 15; i++){
     await sleep(1000);
-    let rows;
-    try{ rows = (await apiM(mid, `sessions?cwd=${encodeURIComponent(cwd)}`)).sessions; }
+    // "is it still running" only needs the pidfiles, not a re-read of every
+    // transcript in the folder — the old poll took seconds per tick.
+    try{ if(!(await apiM(mid, `alive?sessionId=${encodeURIComponent(sessionId)}`)).alive) break; }
     catch(e){ continue; }
-    const row = (rows || []).find(x => x.session_id === sessionId);
-    if(!row || !row.is_live) break;
   }
   const m = mById(mid);
   if(m) loadNodeFolders(m);                 // the machine's live count in the sidebar
@@ -1209,11 +1215,8 @@ async function switchAccount(mid,cwd,sessionId){
   }catch(e){ toast(t("오류: ")+e.message); markStopping(sessionId, false); return; }
   for(let i = 0; i < 15; i++){          // resume refuses while the old one holds the session
     await sleep(1000);
-    try{
-      const rows = (await apiM(mid, `sessions?cwd=${encodeURIComponent(cwd)}`)).sessions || [];
-      const row = rows.find(x => x.session_id === sessionId);
-      if(!row || !row.is_live) break;
-    }catch(e){ /* keep waiting */ }
+    try{ if(!(await apiM(mid, `alive?sessionId=${encodeURIComponent(sessionId)}`)).alive) break; }
+    catch(e){ /* keep waiting */ }
   }
   resume(mid, cwd, sessionId, false);   // picks up the machine's current account
 }

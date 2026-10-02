@@ -44,6 +44,61 @@ _launches: dict[str, dict] = {}
 _lock = threading.Lock()
 
 
+_procs: dict = {}     # token -> launcher Popen, while this agent process lives
+
+_LOGIN_GONE = (b"Not logged in", b"Login expired")
+_auth_checked: dict = {}   # token -> launch started, once its login has been asked about
+
+
+def _logged_out(token: str) -> str | None:
+    """A claude with no login doesn't exit — it sits at the prompt saying so —
+    so the launcher stays up and the exit test above never fires. Once a launch
+    has gone a few seconds without a bridge, ask that account's login state,
+    once. (`auth status` can still say yes for an expired token; that case ends
+    with claude exiting, which the exit test catches.)"""
+    with _lock:
+        rec = _launches.get(token)
+        if rec is None or token in _auth_checked or time.time() - rec["started"] < 8:
+            return None
+        _auth_checked[token] = True
+    st = accounts.status(rec.get("account") or "")
+    if st.get("loggedIn") is False:
+        return "이 계정은 로그인되어 있지 않습니다 — 계정(👤)에서 로그인하세요"
+    return None
+
+
+def _launch_dead_end(token: str, log_path) -> str | None:
+    """Why this launch can never reach claude.ai/code, or None to keep waiting.
+
+    The decision is whether the launcher has exited: it owns claude's terminal
+    and leaves when claude does, so an exited launcher with no bridge is final —
+    waiting out the timeout only delays the news, and that became minutes once
+    big resumes were given longer. The log is NOT used to decide: a resume
+    replays recent conversation on screen first, so a transcript that merely
+    mentions "Not logged in" would read as a dead launch. It only picks the
+    message, from the last stretch of output, where claude's own exit text is.
+    """
+    with _lock:
+        proc = _procs.get(token)
+    if proc is None:
+        return None
+    if proc.poll() is None:
+        return _logged_out(token)
+    with _lock:
+        _procs.pop(token, None)
+    tail = b""
+    try:
+        with open(log_path, "rb") as fh:
+            fh.seek(0, 2)
+            fh.seek(max(0, fh.tell() - 2048))
+            tail = fh.read()
+    except OSError:
+        pass
+    if any(n in tail for n in _LOGIN_GONE):
+        return "이 머신의 클로드 로그인이 만료됐습니다 — 계정(👤)에서 다시 로그인하세요"
+    return "클로드가 시작 직후 종료됐습니다 — 실행 로그를 확인하세요"
+
+
 def _launch_timeout(resume_id: str) -> int:
     """How long a launch may take before we call it failed.
 
@@ -81,9 +136,11 @@ class Agent:
             "agentVersion": __version__,
         }
 
-    def folders(self) -> dict:
+    def folders(self, with_codex: bool = True) -> dict:
         # merge Claude folders with Codex folders (same cwd -> one row)
         rows = common.list_folders()
+        if not with_codex:
+            return {"folders": rows, "activeAccount": accounts.active()}
         by_cwd = {f["cwd"]: f for f in rows}
         for cf in codex.list_folders():
             f = by_cwd.get(cf["cwd"])
@@ -97,11 +154,12 @@ class Agent:
                 by_cwd[cf["cwd"]] = cf
         return {"folders": rows, "activeAccount": accounts.active()}
 
-    def sessions(self, cwd: str) -> dict:
+    def sessions(self, cwd: str, with_codex: bool = True) -> dict:
         rows = common.list_sessions_for_cwd(cwd)
         for r in rows:
             r.setdefault("agent", "claude")
-        rows += codex.list_sessions_for_cwd(cwd)
+        if with_codex:
+            rows += codex.list_sessions_for_cwd(cwd)
         rows.sort(key=lambda r: r.get("last_activity") or 0, reverse=True)
         return {"sessions": rows, "activeAccount": accounts.active()}
 
@@ -323,7 +381,9 @@ class Agent:
             )
         else:
             kw["start_new_session"] = True
-        subprocess.Popen(argv, **kw)
+        proc = subprocess.Popen(argv, **kw)
+        with _lock:
+            _procs[token] = proc
         rec = {
             "cwd": cwd,
             "account": acct,
@@ -395,6 +455,11 @@ class Agent:
                 if token in _launches:
                     _launches[token].update(state="ready", url=url)
             rec.update(state="ready", url=url)
+        elif (dead := _launch_dead_end(token, self.log_dir / f"{token}.log")):
+            with _lock:
+                if token in _launches:
+                    _launches[token].update(state="failed", error=dead)
+            rec.update(state="failed", error=dead)
         elif time.time() - rec["started"] > rec.get("timeout", 45):
             err = "timed out waiting for session (check auth / trust prompt)"
             with _lock:
@@ -499,15 +564,23 @@ def _make_handler(agent: Agent):
             q = parse_qs(u.query)
             if u.path == "/health":
                 return self._send(agent.health())
+            # ?codex=0 skips Codex entirely. Listing it means reading every
+            # rollout on the machine — 518 files / 3.9GB here, mostly one-shot
+            # `codex exec` calls — on every folder click.
+            with_codex = (q.get("codex") or ["1"])[0] != "0"
             if u.path == "/folders":
-                return self._send(agent.folders())
+                return self._send(agent.folders(with_codex))
+            if u.path == "/alive":
+                sid = (q.get("sessionId") or [""])[0]
+                return self._send({"alive": any(x.get("session_id") == sid
+                                                for x in common.live_sessions())})
             if u.path == "/codex/projects":
                 return self._send({"projects": codex.list_projects()})
             if u.path == "/sessions":
                 cwd = (q.get("cwd") or [""])[0]
                 if not cwd:
                     return self._send({"error": "cwd required"}, 400)
-                return self._send(agent.sessions(cwd))
+                return self._send(agent.sessions(cwd, with_codex))
             if u.path == "/launch":
                 token = (q.get("token") or [""])[0]
                 return self._send(agent.launch_status(token))
