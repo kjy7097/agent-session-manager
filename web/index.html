@@ -239,6 +239,15 @@
               style="flex:1;background:var(--bg);color:var(--fg);border:1px solid var(--border);border-radius:6px;padding:8px;font-size:13px"></select>
     </div>
     <div id="acct-list" style="padding:12px 18px"></div>
+    <div id="acct-org" style="display:none;padding:0 18px 12px">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:6px" data-i18n="로그인할 조직">로그인할 조직</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <select id="acct-org-sel" onchange="acctOrgSel()" style="flex:1;min-width:180px;background:var(--bg);color:var(--fg);border:1px solid var(--border);border-radius:6px;padding:8px"></select>
+        <input id="acct-org-uuid" class="searchbox" style="flex:1;min-width:180px;display:none" spellcheck="false" placeholder="00000000-0000-0000-0000-000000000000">
+        <button class="primary" onclick="acctLoginGo()" data-i18n="로그인 주소 받기">로그인 주소 받기</button>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:6px" data-i18n="처음 쓰는 조직은 '브라우저에서 선택'으로 한 번 로그인하면 다음부터 목록에 나옵니다.">처음 쓰는 조직은 '브라우저에서 선택'으로 한 번 로그인하면 다음부터 목록에 나옵니다.</div>
+    </div>
     <div id="acct-login" style="display:none;padding:0 18px 12px">
       <div style="font-size:12px;color:var(--muted);margin-bottom:6px" data-i18n="아래 주소를 열어 로그인한 뒤, 받은 코드를 붙여넣으세요.">아래 주소를 열어 로그인한 뒤, 받은 코드를 붙여넣으세요.</div>
       <a id="acct-url" target="_blank" rel="noopener" style="display:block;font-size:11px;word-break:break-all;color:var(--accent2);margin-bottom:8px"></a>
@@ -364,7 +373,7 @@ const EN={
 "Codex 세션 생성됨":"Codex session created","⌨ 터미널":"⌨ Terminal","📋 터미널 명령 복사됨 — 터미널에 붙여넣으세요":"📋 Terminal command copied — paste it into your terminal","아래 명령을 복사해 터미널에서 실행:":"Copy this command and run it in your terminal:","터미널에서 이어가기 (SSH 명령 복사)":"Continue in a terminal (copy SSH command)","터미널에서 인터랙티브로 이어가기":"Continue interactively in a terminal","열기":"Open","👁 미리보기":"👁 Preview","Fork":"Fork","삭제":"Delete","■ 종료":"■ Stop","💬 대화":"💬 Chat",
 "📌 고정":"📌 Pin","📌 고정됨":"📌 Pinned","상단 고정":"Pin to top","상단 고정 해제":"Unpin from top",
 "폴더 없음 — ＋로 추가":"No folders — add with ＋",
- "🔎 폴더 검색 · Enter로 전체 세션 검색":"🔎 Filter folders · Enter to search all sessions","지우기":"Clear","🔎 전체 세션 검색":"🔎 Search all sessions","닫기":"Close","검색 중…":"Searching…","머신":"machines","건":"","일부만":"partial","결과가 많아 일부만 표시합니다":"Too many matches — showing the most recent","검색할 수 있는 머신이 없습니다":"No reachable machines","종료 중…":"stopping…","이 머신 새로고침":"Refresh this machine","🟧 이미 실행 중인 세션에 연결하는 중…":"🟧 Attaching to the session that is already running…","🟧 큰 대화를 불러오는 중… ":"🟧 Loading a large conversation… ","초":"s","이 머신이 쓰는 계정":"Account this machine uses","이 세션의 계정":"This session's account","이 세션은 다른 계정으로 실행됐습니다":"Started under a different account","종료하고 현재 계정으로 다시 열기":"Stop and reopen under the current account","(으)로 전환":"","이 세션을 종료하고 현재 계정으로 다시 열까요?":"Stop this session and reopen it under the current account?","실행 중인 이 세션을 종료할까요?":"Stop this running session?","종료 실패: ":"Could not stop: ","클로드 계정":"Claude accounts","클로드 계정 전환":"Switch Claude account","로그인 안 됨":"not signed in","사용 중":"in use","사용":"Use","로그인":"Sign in","다시 로그인":"Sign in again","머신 기본":"machine default","계정 없음":"No accounts","새 계정 이름":"New account name","머신":"Machine","＋ 추가":"＋ Add","이름을 입력하세요":"Enter a name","만드는 중…":"Creating…","계정 전환됨: ":"Switched to: ","이 계정을 삭제할까요? 세션 기록은 공유라 지워지지 않습니다.":"Delete this account? Session history is shared and is not deleted.","로그인 주소를 받는 중…":"Getting the sign-in link…","아래 주소를 열어 로그인한 뒤, 받은 코드를 붙여넣으세요.":"Open the link, sign in, then paste the code you get back.","여기에 코드 붙여넣기":"Paste the code here","확인":"Submit","브라우저에서 로그인한 뒤 코드를 붙여넣으세요":"Sign in in the browser, then paste the code","코드를 붙여넣으세요":"Paste the code","확인 중…":"Checking…","로그인 완료":"Signed in","모두 펼치기":"Expand all","모두 접기":"Collapse all","노드의 폴더를 고르세요.":"Pick a folder.","📌 추가됨":"📌 added","더보기":"Show more","접기":"Show less",
+ "🔎 폴더 검색 · Enter로 전체 세션 검색":"🔎 Filter folders · Enter to search all sessions","지우기":"Clear","🔎 전체 세션 검색":"🔎 Search all sessions","닫기":"Close","검색 중…":"Searching…","머신":"machines","건":"","일부만":"partial","결과가 많아 일부만 표시합니다":"Too many matches — showing the most recent","검색할 수 있는 머신이 없습니다":"No reachable machines","종료 중…":"stopping…","이 머신 새로고침":"Refresh this machine","🟧 이미 실행 중인 세션에 연결하는 중…":"🟧 Attaching to the session that is already running…","🟧 큰 대화를 불러오는 중… ":"🟧 Loading a large conversation… ","초":"s","이 머신이 쓰는 계정":"Account this machine uses","이 세션의 계정":"This session's account","이 세션은 다른 계정으로 실행됐습니다":"Started under a different account","종료하고 현재 계정으로 다시 열기":"Stop and reopen under the current account","(으)로 전환":"","이 세션을 종료하고 현재 계정으로 다시 열까요?":"Stop this session and reopen it under the current account?","실행 중인 이 세션을 종료할까요?":"Stop this running session?","종료 실패: ":"Could not stop: ","클로드 계정":"Claude accounts","클로드 계정 전환":"Switch Claude account","로그인 안 됨":"not signed in","사용 중":"in use","사용":"Use","로그인":"Sign in","다시 로그인":"Sign in again","머신 기본":"machine default","계정 없음":"No accounts","새 계정 이름":"New account name","머신":"Machine","로그인할 조직":"Organization to sign in to","로그인 주소 받기":"Get sign-in link","브라우저에서 선택":"Choose in the browser","조직 ID 직접 입력…":"Enter organization ID…","지금 조직: ":"Current organization: ","다시 로그인 / 조직 변경":"Sign in again / change org","처음 쓰는 조직은 '브라우저에서 선택'으로 한 번 로그인하면 다음부터 목록에 나옵니다.":"Sign in once with 'Choose in the browser' and that organization joins this list.","＋ 추가":"＋ Add","이름을 입력하세요":"Enter a name","만드는 중…":"Creating…","계정 전환됨: ":"Switched to: ","이 계정을 삭제할까요? 세션 기록은 공유라 지워지지 않습니다.":"Delete this account? Session history is shared and is not deleted.","로그인 주소를 받는 중…":"Getting the sign-in link…","아래 주소를 열어 로그인한 뒤, 받은 코드를 붙여넣으세요.":"Open the link, sign in, then paste the code you get back.","여기에 코드 붙여넣기":"Paste the code here","확인":"Submit","브라우저에서 로그인한 뒤 코드를 붙여넣으세요":"Sign in in the browser, then paste the code","코드를 붙여넣으세요":"Paste the code","확인 중…":"Checking…","로그인 완료":"Signed in","모두 펼치기":"Expand all","모두 접기":"Collapse all","노드의 폴더를 고르세요.":"Pick a folder.","📌 추가됨":"📌 added","더보기":"Show more","접기":"Show less",
 "이 폴더 세션 전체 삭제":"Delete all sessions in this folder","목록에서 제거(핀 해제)":"Remove from list (unpin)","머신 제거":"Remove machine",
 "에이전트 없음":"no agent","개":"","　":" ",
 "이 세션을 삭제할까요? 되돌릴 수 없습니다.":"Delete this session? This cannot be undone.",
@@ -683,7 +692,7 @@ function renderFolderView(mid,cwd){
 // An account is a login the agent keeps on that machine; the picker switches
 // which one new sessions use. Which machine we are configuring follows the
 // folder currently selected in the sidebar, since the accounts live per machine.
-let ACCT_MID = "", ACCT_TOKEN = "";
+let ACCT_MID = "", ACCT_TOKEN = "", ACCT_ORGS = [], ACCT_ROWS = [], ACCT_LOGIN_NAME = "";
 // Which account each machine is currently launching with. Filled in from the
 // folder and session responses, so no extra round trip just to label things.
 const ACTIVE_ACCT = {};
@@ -696,6 +705,7 @@ async function openAccounts(mid){
   if(!ACCT_MID){ toast(t("검색할 수 있는 머신이 없습니다")); return; }
   $("#acct").classList.add("show");
   $("#acct-login").style.display = "none";
+  $("#acct-org").style.display = "none";
   ACCT_TOKEN = "";
   acctMsg("");
   // Accounts live on the machine that runs the sessions, so which machine we
@@ -716,6 +726,8 @@ async function acctRefresh(){
   try{ r = await apiM(ACCT_MID, "accounts"); }
   catch(e){ $("#acct-list").innerHTML = `<div class="empty sm">${esc(e.message)}</div>`; return; }
   const rows = r.accounts || [];
+  ACCT_ORGS = r.orgs || [];
+  ACCT_ROWS = rows;
   $("#acct-list").innerHTML = rows.map(a=>{
     const nj = JSON.stringify(a.name);
     const who = a.loggedIn
@@ -724,7 +736,7 @@ async function acctRefresh(){
     const use = a.active
       ? `<span class="badge live">${t("사용 중")}</span>`
       : `<button onclick='acctSelect(${nj})'>${t("사용")}</button>`;
-    const login = `<button class="ghost" onclick='acctLogin(${nj})'>${a.loggedIn?t("다시 로그인"):t("로그인")}</button>`;
+    const login = `<button class="ghost" onclick='acctLogin(${nj})'>${a.loggedIn?t("다시 로그인 / 조직 변경"):t("로그인")}</button>`;
     const del = a.isDefault ? "" : `<button class="ghost danger" onclick='acctDelete(${nj})'>${t("삭제")}</button>`;
     return `<div class="session" style="margin-bottom:8px">
       <div class="row1"><span class="title">${esc(a.label)}</span>${a.isDefault?`<span class="badge">${t("머신 기본")}</span>`:""}</div>
@@ -767,12 +779,34 @@ async function acctDelete(name){
   }catch(e){ acctMsg(e.message, true); }
 }
 
-async function acctLogin(name){
+// Step 1: which organization. claude.com can show its own picker, or the
+// sign-in can be pinned to an org this machine has seen (forceLoginOrgUUID).
+function acctLogin(name){
+  ACCT_LOGIN_NAME = name;
+  $("#acct-login").style.display = "none";
+  const cur = (ACCT_ROWS.find(a => a.name === name) || {}).orgUuid || "";
+  const sel = $("#acct-org-sel");
+  sel.innerHTML = `<option value="">${t("브라우저에서 선택")}</option>` +
+    ACCT_ORGS.map(o => `<option value="${esc(o.uuid)}">${esc(o.name || o.uuid)}</option>`).join("") +
+    `<option value="__uuid">${t("조직 ID 직접 입력…")}</option>`;
+  sel.value = "";
+  $("#acct-org-uuid").style.display = "none"; $("#acct-org-uuid").value = "";
+  $("#acct-org").style.display = "";
+  acctMsg(cur ? t("지금 조직: ") + ((ACCT_ORGS.find(o => o.uuid === cur) || {}).name || cur) : "");
+}
+function acctOrgSel(){
+  $("#acct-org-uuid").style.display = $("#acct-org-sel").value === "__uuid" ? "" : "none";
+}
+async function acctLoginGo(){
+  const name = ACCT_LOGIN_NAME;
+  let org = $("#acct-org-sel").value;
+  if(org === "__uuid") org = ($("#acct-org-uuid").value || "").trim();
   acctMsg(t("로그인 주소를 받는 중…"));
+  $("#acct-org").style.display = "none";
   $("#acct-login").style.display = "none";
   try{
     const r = await apiM(ACCT_MID, "accounts/login", {method:"POST",
-      headers:{"Content-Type":"application/json"}, body:JSON.stringify({name})});
+      headers:{"Content-Type":"application/json"}, body:JSON.stringify({name, org})});
     if(r.error) throw new Error(r.error);
     ACCT_TOKEN = r.token;
     const a = $("#acct-url"); a.href = r.url; a.textContent = r.url;

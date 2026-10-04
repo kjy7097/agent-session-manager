@@ -651,7 +651,8 @@ def _make_handler(agent: Agent):
                 return self._send(accounts.logout((body.get("name") or "").strip()))
             if u.path == "/accounts/login":
                 return self._send(accounts.login_start(
-                    (body.get("name") or "").strip(), bool(body.get("console"))))
+                    (body.get("name") or "").strip(), bool(body.get("console")),
+                    (body.get("org") or "").strip()))
             if u.path == "/accounts/code":
                 tok = (body.get("token") or "").strip()
                 code = (body.get("code") or "").strip()

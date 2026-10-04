@@ -119,6 +119,57 @@ def status(name: str, timeout: int = 20) -> dict:
         return {"loggedIn": False, "error": str(e)}
 
 
+import re as _re
+_UUID = _re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+
+
+def _orgs_file() -> Path:
+    return common.claude_home() / ".csm-known-orgs.json"
+
+
+def known_orgs() -> list:
+    """Organizations this machine has signed into, as [{uuid, name}].
+
+    claude only keeps the org of each login (oauthAccount in that account's
+    config file), never the list of every org the user belongs to, and fetching
+    that list would mean spending a login's token from here — which can sign
+    out the sessions sharing it. So collect them as they appear: every org any
+    account on this machine has used, remembered after the account is gone.
+    """
+    seen = {}
+    try:
+        seen = json.loads(_orgs_file().read_text(encoding="utf-8")) or {}
+    except (OSError, json.JSONDecodeError):
+        seen = {}
+    names = [""]
+    if accounts_dir().is_dir():
+        names += [p.name for p in accounts_dir().iterdir() if p.is_dir()]
+    changed = False
+    for n in names:
+        try:
+            oa = json.loads(_config_file(n).read_text(encoding="utf-8")).get("oauthAccount") or {}
+        except (OSError, json.JSONDecodeError):
+            continue
+        u, nm = oa.get("organizationUuid"), oa.get("organizationName")
+        if u and _UUID.match(u) and seen.get(u) != nm:
+            seen[u] = nm or u
+            changed = True
+    if changed:
+        try:
+            _orgs_file().write_text(json.dumps(seen, ensure_ascii=False), encoding="utf-8")
+        except OSError:
+            pass
+    return [{"uuid": u, "name": nm} for u, nm in sorted(seen.items(), key=lambda kv: kv[1] or "")]
+
+
+def _org_of(name: str) -> str | None:
+    try:
+        return (json.loads(_config_file(name).read_text(encoding="utf-8"))
+                .get("oauthAccount") or {}).get("organizationUuid")
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
 def _row(name: str) -> dict:
     ensure_links(name)
     st = status(name)
@@ -130,6 +181,7 @@ def _row(name: str) -> dict:
         "loggedIn": bool(st.get("loggedIn")),
         "email": st.get("email"),
         "orgName": st.get("orgName"),
+        "orgUuid": _org_of(name) if st.get("loggedIn") else None,
         "subscriptionType": st.get("subscriptionType"),
         "authMethod": st.get("authMethod"),
         "error": st.get("error"),
@@ -158,7 +210,7 @@ def list_accounts() -> dict:
         t.start()
     for t in ts:
         t.join(timeout=25)
-    return {"accounts": [r for r in rows if r], "active": active()}
+    return {"accounts": [r for r in rows if r], "active": active(), "orgs": known_orgs()}
 
 
 def _link(src: Path, dst: Path) -> None:
@@ -299,15 +351,26 @@ def _sweep() -> None:
             _logins.pop(tok, None)
 
 
-def login_start(name: str, console: bool = False) -> dict:
+def login_start(name: str, console: bool = False, org: str = "") -> dict:
     """Begin a login and return the URL to open. The process stays alive waiting
-    for the code, so the caller must come back with login_code()."""
+    for the code, so the caller must come back with login_code().
+
+    `org` pins the sign-in to one organization (claude's forceLoginOrgUUID,
+    which puts orgUUID on the authorize URL). It is passed with --settings for
+    this one command rather than written to settings.json: that file is shared
+    by every account through a link, so writing it would pin them all. Without
+    it, claude.com shows its own organization picker."""
     _sweep()
     d = config_dir_for(name)
     if name and not d.is_dir():
         return {"error": f"unknown account: {name}"}
+    if org and not _UUID.match(org):
+        return {"error": "invalid organization id"}
     exe = shutil.which("claude") or str(Path.home() / ".local/bin/claude")
-    argv = [exe, "auth", "login"] + (["--console"] if console else [])
+    argv = [exe]
+    if org:
+        argv += ["--settings", json.dumps({"forceLoginOrgUUID": org})]
+    argv += ["auth", "login"] + (["--console"] if console else [])
     env = _env_for(name)
     try:
         proc = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
@@ -371,6 +434,7 @@ def login_code(token: str, code: str) -> dict:
     with _lock:
         _logins.pop(token, None)
     seed_config(rec["name"])
+    known_orgs()            # file the org this login landed in
     st = status(rec["name"])
     if not st.get("loggedIn"):
         return {"error": "login did not complete",
