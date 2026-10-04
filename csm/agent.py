@@ -365,6 +365,11 @@ class Agent:
             effort = ""
         acct = (body.get("account") if body.get("account") is not None
                 else accounts.active())
+        rc_ok, rc_org = accounts.remote_control(acct)
+        if not rc_ok:
+            logf.close()
+            return {"error": "%s 조직은 원격 제어를 막아 두어 이 매니저로 세션을 열 수 없습니다 "
+                             "— 계정(👤)에서 다른 조직의 계정으로 바꾸세요" % (rc_org or "이 계정의")}
         cfg_dir = str(accounts.config_dir_for(acct)) if acct else ""
         # positional tail: prompt, model, effort, config dir. Trim from the
         # right so an unset middle value still lines up with the launcher's

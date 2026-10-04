@@ -237,7 +237,7 @@ def list_projects() -> list[dict]:
     if cx:
         p = subprocess.Popen([cx, "app-server"], stdin=subprocess.PIPE,
                              stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                             text=True, bufsize=1)
+                             text=True, encoding="utf-8", errors="replace", bufsize=1)
         out: list[str] = []
         threading.Thread(target=lambda: [out.append(l) for l in p.stdout], daemon=True).start()
 
@@ -303,7 +303,7 @@ def _appserver_session(cwd: str, prompt: str, model: str = "",
         return {"ok": False, "error": "codex CLI not installed on this machine"}
     p = subprocess.Popen([cx, "app-server"], stdin=subprocess.PIPE,
                          stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                         text=True, bufsize=1)
+                         text=True, encoding="utf-8", errors="replace", bufsize=1)
     out: list[str] = []
     threading.Thread(target=lambda: [out.append(l) for l in p.stdout], daemon=True).start()
 

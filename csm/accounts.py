@@ -105,8 +105,13 @@ def status(name: str, timeout: int = 20) -> dict:
     env = _env_for(name)
     exe = shutil.which("claude") or str(Path.home() / ".local/bin/claude")
     try:
+        # claude writes UTF-8; text=True alone decodes with the locale codec,
+        # which is cp949 on Korean Windows. The first non-ASCII organization
+        # name (울산대학교) made that decode fail, stdout came back empty, and a
+        # login that had succeeded was reported as "did not complete".
         r = subprocess.run([exe, "auth", "status", "--json"], capture_output=True,
-                           text=True, timeout=timeout, env=env)
+                           text=True, encoding="utf-8", errors="replace",
+                           timeout=timeout, env=env)
     except (OSError, subprocess.SubprocessError) as e:
         return {"loggedIn": False, "error": str(e)}
     out = (r.stdout or "").strip()
@@ -170,6 +175,28 @@ def _org_of(name: str) -> str | None:
         return None
 
 
+def remote_control(name: str) -> tuple:
+    """(allowed, organization name) for an account.
+
+    An organization can switch Remote Control off, and claude records that in
+    policy-limits.json inside the account's config dir. Without Remote Control a
+    session never gets a claude.ai/code link, which is the only thing this
+    manager opens — so a launch on such an account can only time out. The file
+    appears once claude has run for that login; absent, assume allowed."""
+    org = None
+    try:
+        org = (json.loads(_config_file(name).read_text(encoding="utf-8"))
+               .get("oauthAccount") or {}).get("organizationName")
+    except (OSError, json.JSONDecodeError):
+        pass
+    try:
+        pol = json.loads((config_dir_for(name) / "policy-limits.json").read_text(encoding="utf-8"))
+        allowed = ((pol.get("restrictions") or {}).get("allow_remote_control") or {}).get("allowed")
+    except (OSError, json.JSONDecodeError, AttributeError):
+        allowed = None
+    return (allowed is not False, org)
+
+
 def _row(name: str) -> dict:
     ensure_links(name)
     st = status(name)
@@ -182,6 +209,7 @@ def _row(name: str) -> dict:
         "email": st.get("email"),
         "orgName": st.get("orgName"),
         "orgUuid": _org_of(name) if st.get("loggedIn") else None,
+        "remoteControl": remote_control(name)[0],
         "subscriptionType": st.get("subscriptionType"),
         "authMethod": st.get("authMethod"),
         "error": st.get("error"),
