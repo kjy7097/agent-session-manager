@@ -24,8 +24,6 @@ import sys
 import time
 
 ANSI = re.compile(rb"\x1b\[[0-9;?]*[A-Za-z]")
-# Any prompt we know how to answer, as it appears in the normalized screen.
-PROMPT_NEEDLES = (b"quicksafetycheck", b"allowexternalclaude.mdfileimports")
 READY_NEEDLES = (b"remotecontrol", b"claude.ai/code")
 # The picker's highlight marker: ❯ on POSIX, plain ">" on a Windows console.
 POINTERS = ("\u276f", "\u203a", "\u25b6", ">")
@@ -106,11 +104,14 @@ def main() -> int:
     # parent: drain pty, auto-confirm trust, optionally inject a prompt, stay alive
     buf = b""
     trust_sent = 0
-    last_trust = 0.0
+    # not 0.0: monotonic() can start near zero with the process, and the
+    # prompt shows up well inside the first 1.5s
+    last_trust = float("-inf")
     start = time.monotonic()
     ready_at = None
     prompt_sent = not prompt  # nothing to send if no prompt
     logged = 0  # mirror the first 64KB of PTY output to stderr (the token log)
+    norm = b""
     while True:
         try:
             r, _, _ = select.select([fd], [], [], 1.0)
@@ -132,28 +133,32 @@ def main() -> int:
                 logged += len(data)
             buf += data
             norm = ANSI.sub(b"", buf).lower().replace(b" ", b"").replace(b"\n", b"")
-            if (
-                any(n in norm for n in PROMPT_NEEDLES)
-                and trust_sent < 6
-                and time.monotonic() - last_trust > 1.5
-            ):
-                try:
-                    time.sleep(0.5)  # let the picker finish mounting
-                    if _needs_down(norm.decode("utf-8", "replace")):
-                        os.write(fd, b"\x1b[B")  # move to "Yes, I trust this folder"
-                        time.sleep(0.5)
-                    os.write(fd, b"\r")
-                except OSError:
-                    pass
-                trust_sent += 1
-                last_trust = time.monotonic()
-                # forget the dialog text we just answered: a retry must only fire
-                # if claude re-renders the prompt (otherwise a 2nd Down wraps back
-                # to "No, exit" and Enter quits the session)
-                buf = b""
             if ready_at is None and any(n in norm for n in READY_NEEDLES):
                 ready_at = time.monotonic()
             buf = buf[-8192:]  # bound memory over a long session
+        # Checked on idle ticks too: a prompt that has finished drawing sends
+        # nothing more, so waiting for the next chunk can mean waiting forever.
+        if (
+            # the title can arrive a chunk before the options; answering
+            # then means a bare Enter on "No, exit"
+            _wanted_option(norm.decode("utf-8", "replace"))
+            and trust_sent < 6
+            and time.monotonic() - last_trust > 1.5
+        ):
+            try:
+                time.sleep(0.5)  # let the picker finish mounting
+                if _needs_down(norm.decode("utf-8", "replace")):
+                    os.write(fd, b"\x1b[B")  # move to "Yes, I trust this folder"
+                    time.sleep(0.5)
+                os.write(fd, b"\r")
+            except OSError:
+                pass
+            trust_sent += 1
+            last_trust = time.monotonic()
+            # forget the dialog text we just answered: a retry must only fire
+            # if claude re-renders the prompt (otherwise a 2nd Down wraps back
+            # to "No, exit" and Enter quits the session)
+            buf = norm = b""
         # fallback: if we never saw a READY marker (claude may emit little on the
         # PTY), assume ready ~8s after start so the seed still gets injected.
         if not prompt_sent and ready_at is None and time.monotonic() - start > 8:
