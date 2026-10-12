@@ -32,17 +32,26 @@ POINTERS = ("\u276f", "\u203a", "\u25b6", ">")
 # folder-trust prompt already commits to running here, so the import prompt —
 # which only asks whether the CLAUDE.md files of that same trusted folder may
 # be read — is not a wider decision than the one already made.
+#
+# A project's .mcp.json asks whether to start the servers it lists. That is a
+# decision about running someone's program with their settings (the file often
+# comes in with the repo), so it gets the answer claude itself defaults to —
+# continue without — and only when that option is the highlighted one: a
+# third entry of False means never move the highlight to get there.
 PROMPTS = (
-    ("quicksafetycheck", "yes,itrustthisfolder"),
-    ("allowexternalclaude.mdfileimports", "yes,allowexternalimports"),
+    ("quicksafetycheck", "yes,itrustthisfolder", True),
+    ("allowexternalclaude.mdfileimports", "yes,allowexternalimports", True),
+    ("newmcpserverfoundinthisproject", "continuewithoutusingthismcpserver", False),
 )
 
 
 def _wanted_option(norm):
     """The option to land on, for whichever known prompt is on screen."""
-    for needle, want in PROMPTS:
-        if needle in norm and norm.rfind(want) != -1:
-            return want
+    for needle, want, may_move in PROMPTS:
+        j = norm.rfind(want)
+        if needle in norm and j != -1:
+            if may_move or (j and norm[j - 1] in POINTERS):
+                return want
     return None
 
 
