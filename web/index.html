@@ -310,7 +310,11 @@
 <div class="modal-bg" id="picker" onclick="if(event.target.id==='picker')closePicker()">
   <div class="modal">
     <h3 id="pk-title">폴더 추가</h3>
-    <div style="font-size:11px;color:var(--muted);padding:2px 2px 6px;line-height:1.5" data-i18n="🟢 Codex 세션이 앱에 뜨려면, 그 폴더를 Codex 데스크톱 앱에서도 프로젝트로 추가해야 합니다. 아래 목록엔 Codex 세션이 있는 폴더만 뜨고, Codex 세션이 없는 폴더는 직접 고르세요.">🟢 Codex 세션이 앱에 뜨려면, 그 폴더를 Codex 데스크톱 앱에서도 프로젝트로 추가해야 합니다. 아래 목록엔 Codex 세션이 있는 폴더만 뜨고, Codex 세션이 없는 폴더는 직접 고르세요.</div>
+    <div id="pk-move" style="display:none;font-size:12px;color:var(--muted);padding:2px 2px 8px;line-height:1.5">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><span data-i18n="옮길 머신">옮길 머신</span>
+        <select id="pk-machine" onchange="pkSwitchMachine(this.value)" style="background:var(--panel);color:var(--fg);border:1px solid var(--border);border-radius:6px;padding:4px 6px"></select></div>
+      <div data-i18n="대상 머신에 같은 프로젝트 폴더가 있어야 합니다 (코드는 옮기지 않습니다). 원래 머신의 사본은 숨겨지고 지워지지는 않습니다.">대상 머신에 같은 프로젝트 폴더가 있어야 합니다 (코드는 옮기지 않습니다). 원래 머신의 사본은 숨겨지고 지워지지는 않습니다.</div></div>
+    <div id="pk-hint" style="font-size:11px;color:var(--muted);padding:2px 2px 6px;line-height:1.5" data-i18n="🟢 Codex 세션이 앱에 뜨려면, 그 폴더를 Codex 데스크톱 앱에서도 프로젝트로 추가해야 합니다. 아래 목록엔 Codex 세션이 있는 폴더만 뜨고, Codex 세션이 없는 폴더는 직접 고르세요.">🟢 Codex 세션이 앱에 뜨려면, 그 폴더를 Codex 데스크톱 앱에서도 프로젝트로 추가해야 합니다. 아래 목록엔 Codex 세션이 있는 폴더만 뜨고, Codex 세션이 없는 폴더는 직접 고르세요.</div>
     <div class="crumbs" id="pk-crumbs"></div>
     <div id="pk-codex" style="display:none;padding:8px 4px;border-bottom:1px solid var(--border);max-height:168px;overflow:auto;flex:0 0 auto"></div>
     <div style="display:flex;min-height:160px;flex:1;overflow:hidden">
@@ -319,11 +323,11 @@
     </div>
     <div class="pk-direct">
       <input id="pk-path" data-i18n-ph="또는 경로 직접 입력 후 Enter" placeholder="또는 경로 직접 입력 후 Enter" spellcheck="false" onkeydown="if(event.key==='Enter')pickTyped()">
-      <button onclick="pickTyped()" data-i18n="추가">추가</button>
+      <button id="pk-typed-btn" onclick="pickTyped()" data-i18n="추가">추가</button>
     </div>
     <div class="modal-foot"><div class="cur"><span data-i18n="선택:">선택:</span> <code id="pk-cur"></code></div>
       <button onclick="closePicker()" data-i18n="취소">취소</button>
-      <button class="primary" onclick="pickHere()" data-i18n="＋ 이 폴더 추가">＋ 이 폴더 추가</button></div>
+      <button class="primary" id="pk-here-btn" onclick="pickHere()" data-i18n="＋ 이 폴더 추가">＋ 이 폴더 추가</button></div>
   </div>
 </div>
 
@@ -407,7 +411,13 @@ const EN={
 "🟢 새 Codex 세션 — 첫 메시지:":"🟢 New Codex session — first message:",
 "Codex 세션 생성 중… (응답까지 잠시)":"Starting Codex session… (takes a moment)","Codex 세션 생성됨":"Codex session started",
 "이 폴더의 파일":"Files in this folder","개 중 ":" total, showing ","개 표시":"","총 ":"",
-"실행 중인 세션은":"Stop running sessions first"
+"실행 중인 세션은":"Stop running sessions first",
+"⇄ 옮기기":"⇄ Move","다른 머신이나 폴더로 옮겨서 이어가기":"Move to another machine or folder and continue there",
+"세션 옮기기":"Move session","옮길 머신":"Machine","(같은 머신)":"(same machine)","→ 여기로 옮기기":"→ Move here","옮기기":"Move",
+"대상 머신에 같은 프로젝트 폴더가 있어야 합니다 (코드는 옮기지 않습니다). 원래 머신의 사본은 숨겨지고 지워지지는 않습니다.":"The project folder must already exist on the target machine (code is not copied). The original copy is hidden, not deleted.",
+"같은 폴더입니다":"That is the same folder","옮긴 뒤 대상 머신에서 바로 이어갑니다.":"It will be continued on the target machine right after.",
+"세션 옮기는 중…":"Moving session…","확인 중":"checking","폴더 옮기는 중":"moving","묶는 중":"packing","가져오는 중":"fetching","보내는 중":"sending","정리 중":"tidying up",
+"옮겼습니다 — 이어가는 중":"Moved — continuing"
 };
 const t=s=>LANG==="en"?(EN[s]!==undefined?EN[s]:s):s;
 function applyStatic(){
@@ -975,6 +985,7 @@ function sessionRow(s, mid, cwd){
         <button onclick='resume(${mj},${cj},${sj},false)'>${t("이어가기")}</button>
         <button class="ghost" onclick='resume(${mj},${cj},${sj},true)'>Fork</button>
         <button class="ghost" onclick='copyTermCmd(${mj},${cj},${sj},"claude")' title="${t("터미널에서 이어가기 (SSH 명령 복사)")}">⌨</button>
+        ${s.is_live?"":`<button class="ghost" onclick='openMovePicker(${mj},${cj},${sj})' title="${t("다른 머신이나 폴더로 옮겨서 이어가기")}">${t("⇄ 옮기기")}</button>`}
         ${stopBtn}${pinBtn}<button class="ghost danger" onclick='del(${mj},${cj},${sj},${s.is_live})'>${t("삭제")}</button></div></div>`;
 }
 
@@ -1114,8 +1125,73 @@ async function newCodexSession(mid,cwd,model){
 // picker = ADD FOLDER to a node (pin); session is created later from the folder
 async function openPicker(mid,start){
   const m=mById(mid); if(!m.agentReady) return toast("에이전트가 없는 노드입니다");
+  PK_MODE="add"; pkModeUI();
   PK_MID=mid; $("#pk-title").textContent=`폴더 추가 · ${m.name}`; $("#pk-path").value="";
   $("#picker").classList.add("show"); loadCodexProjects(mid); await pkNav(start||null);
+}
+// The same picker, choosing where a session goes instead of a folder to add.
+let PK_MODE="add", PK_MOVE=null;
+function pkModeUI(){
+  const mv=PK_MODE==="move";
+  $("#pk-move").style.display=mv?"block":"none";
+  $("#pk-hint").style.display=mv?"none":"block";
+  if(mv) $("#pk-codex").style.display="none";
+  $("#pk-here-btn").textContent=mv?t("→ 여기로 옮기기"):t("＋ 이 폴더 추가");
+  $("#pk-typed-btn").textContent=mv?t("옮기기"):t("추가");
+}
+async function openMovePicker(mid,cwd,sid){
+  const ms=MACHINES.filter(m=>m.agentReady);
+  const to=(ms.find(m=>m.id!==mid)||ms[0]).id;
+  PK_MODE="move"; PK_MOVE={from:mid,cwd,sid}; pkModeUI();
+  $("#pk-machine").innerHTML=ms.map(m=>`<option value="${esc(m.id)}"${m.id===to?" selected":""}>${osIcon(m.os)} ${esc(m.name)}${m.id===mid?" "+t("(같은 머신)"):""}</option>`).join("");
+  $("#pk-path").value="";
+  $("#picker").classList.add("show");
+  await pkSwitchMachine(to);
+}
+// Start where the session most likely belongs: a folder on that machine with
+// the same name as the one it ran in.
+async function pkSwitchMachine(mid){
+  PK_MID=mid; const m=mById(mid);
+  $("#pk-title").textContent=`${t("세션 옮기기")} → ${m.name}`;
+  const base=(PK_MOVE.cwd.split(/[\\/]/).filter(Boolean).pop()||"").toLowerCase();
+  let start=null;
+  if(mid!==PK_MOVE.from && base){
+    try{
+      const fs=(await apiM(mid,"folders?codex=0")).folders||[];
+      const hit=fs.find(f=>(f.cwd.split(/[\\/]/).filter(Boolean).pop()||"").toLowerCase()===base);
+      if(hit) start=hit.cwd;
+    }catch(e){}
+  }
+  await pkNav(start);
+}
+async function doMove(to,path){
+  const {from,cwd,sid}=PK_MOVE, fm=mById(from), tm=mById(to);
+  if(from===to && path===cwd) return toast(t("같은 폴더입니다"));
+  const ok=await uiConfirm(`${fm.name}: ${cwd}\n→ ${tm.name}: ${path}\n\n${t("옮긴 뒤 대상 머신에서 바로 이어갑니다.")}`, t("세션 옮기기"));
+  if(!ok) return;
+  closePicker();
+  showLoading(t("세션 옮기는 중…"));
+  try{
+    const r=await (await fetch("/api/move",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({from,to,sessionId:sid,cwd:path})})).json();
+    if(r.error) return toast(t("실패: ")+r.error);
+    const stages={check:t("확인 중"),relocate:t("폴더 옮기는 중"),pack:t("묶는 중"),download:t("가져오는 중"),upload:t("보내는 중"),archive:t("정리 중")};
+    let j;
+    for(;;){
+      await sleep(1000);
+      j=await (await fetch(`/api/move?token=${r.token}`)).json();
+      if(j.state!=="running") break;
+      const pct=j.total?` ${fmtSize(j.bytes)} / ${fmtSize(j.total)}`:"";
+      showLoading(`${t("세션 옮기는 중…")} ${stages[j.stage]||""}${pct}`);
+    }
+    if(j.state!=="done") return toast(t("실패: ")+(j.error||"unknown"));
+    if(j.warning) toast(j.warning);
+    loadNodeFolders(fm); if(to!==from) loadNodeFolders(tm);
+    if(FOLDER_MACHINE===from&&FOLDER===cwd) openFolder(from,cwd);
+    toast(t("옮겼습니다 — 이어가는 중"));
+    await resume(to,j.cwd,sid,false);
+  }catch(e){ toast(t("오류: ")+e.message); }
+  finally{ hideLoading(); }
 }
 async function loadCodexProjects(mid){
   const box=$("#pk-codex"); box.style.display="none"; box.innerHTML="";
@@ -1137,7 +1213,7 @@ async function loadCodexProjects(mid){
       }).join("");
   }catch(e){}
 }
-function pkGo(path){ addAndOpen(PK_MID,path); }   // 칩 클릭 = 그 codex 프로젝트 폴더를 바로 추가
+function pkGo(path){ if(PK_MODE==="move") return doMove(PK_MID,path); addAndOpen(PK_MID,path); }   // 칩 클릭 = 그 codex 프로젝트 폴더를 바로 추가
 function closePicker(){ $("#picker").classList.remove("show"); }
 async function pkMkdir(){
   if(!PK_PATH) return;
@@ -1191,8 +1267,8 @@ async function pkNav(path){
   $("#pk-list").innerHTML=dirsHtml+filesHtml;
 }
 function addAndOpen(mid,cwd){ addPin(mid,cwd); closePicker(); loadNodeFolders(mById(mid)); openFolder(mid,cwd); toast(t("폴더 추가됨")); }
-function pickHere(){ if(PK_PATH) addAndOpen(PK_MID,PK_PATH); }
-function pickTyped(){ const p=$("#pk-path").value.trim(); if(p) addAndOpen(PK_MID,p); }
+function pickHere(){ if(PK_PATH) pkGo(PK_PATH); }
+function pickTyped(){ const p=$("#pk-path").value.trim(); if(p) pkGo(p); }
 function unpinFolder(mid,cwd){ removePin(mid,cwd); loadNodeFolders(mById(mid)); if(FOLDER_MACHINE===mid&&FOLDER===cwd){ FOLDER=null; $("#main").innerHTML=`<div class="empty">목록에서 제거됨.</div>`; } }
 
 async function launchIn(mid,cwd){
@@ -1203,7 +1279,7 @@ async function launchIn(mid,cwd){
   const ef=(document.getElementById("ag-effort")||{}).value||DEFEFFORT; if(ef) body.effort=ef;
   doLaunch(mid,body);
 }
-function resume(mid,cwd,sessionId,fork,model,effort){ const b={cwd,resumeId:sessionId,fork}; const m=model!==undefined?model:DEFMODEL; if(m) b.model=m; const e=effort!==undefined?effort:DEFEFFORT; if(e) b.effort=e; doLaunch(mid,b); }
+function resume(mid,cwd,sessionId,fork,model,effort){ const b={cwd,resumeId:sessionId,fork}; const m=model!==undefined?model:DEFMODEL; if(m) b.model=m; const e=effort!==undefined?effort:DEFEFFORT; if(e) b.effort=e; return doLaunch(mid,b); }
 async function doLaunch(mid,body){
   showLoading(t("🟧 Claude 세션 여는 중… (trust 자동승인 + bridge 대기)"));
   try{

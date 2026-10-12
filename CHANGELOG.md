@@ -5,6 +5,32 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Move a session to another machine or folder.** "⇄ Move" on a Claude
+  session picks a machine and a folder there, copies the transcript (and its
+  subagents/tool-results folder) across, re-points every record that ran in the
+  old folder or below it at the new one, and resumes it there. Claude needs
+  nothing more than the transcript to carry on, across operating systems too.
+  The copy goes through a file on disk at each end, never memory, so
+  near-gigabyte transcripts move as well; progress shows while it runs. The old
+  copy moves to `~/.claude/.csm-moved/<id>/` rather than being deleted, so one
+  session id is never live in two places. Moving within a machine re-points it
+  in place, with no copy over the wire.
+- **Pick the organization at sign-in**, and accounts in an organization that
+  blocks Remote Control are marked; opening a session with one is refused at
+  once with the reason instead of timing out.
+
+### Fixed
+- **Sessions in a not-yet-trusted folder exited at once on macOS.** The
+  launcher's "1.5s since the last answer" guard started from 0.0, and on a
+  clock that starts with the process the trust prompt arrived inside that
+  window, after which nothing re-checked it. Before that it could answer the
+  prompt's title before its options had drawn, a bare Enter on "No, exit".
+- Claude's output is read as UTF-8 on Windows; an organization name in Korean
+  made a successful sign-in look like a failed one.
+
 ## [0.7.0] - 2026-09-30
 
 ### Added

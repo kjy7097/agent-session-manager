@@ -94,6 +94,117 @@ def build_registry(cfg: dict) -> list[dict]:
     return machines
 
 
+# ---- moving a session between machines ----------------------------------
+# token -> {state: running|done|failed, stage, bytes, total, cwd, error}
+_moves: dict = {}
+_MOVE_MSG = {
+    "live": "실행 중인 세션입니다. 먼저 종료하세요",
+    "not found": "세션을 찾을 수 없습니다",
+}
+
+
+class _Counted:
+    """File wrapper that tells the job how much has gone over the wire."""
+
+    def __init__(self, fh, job):
+        self.fh, self.job = fh, job
+
+    def read(self, n=-1):
+        b = self.fh.read(n)
+        self.job["bytes"] += len(b)
+        return b
+
+
+def _agent_call(registry, mid, method, path, data=None, headers=None, timeout=60):
+    m = registry["by_id"].get(mid)
+    if not m or not m.get("baseUrl"):
+        raise RuntimeError(f"unknown machine {mid}")
+    secret = registry["cfg"]["secret"]
+    for mm in registry["cfg"].get("machines", []):
+        if mm.get("id") == mid and mm.get("secret"):
+            secret = mm["secret"]
+    req = urllib.request.Request(m["baseUrl"].rstrip("/") + "/" + path, data=data, method=method)
+    req.add_header("Authorization", f"Bearer {secret}")
+    for k, v in (headers or {}).items():
+        req.add_header(k, v)
+    try:
+        return urllib.request.urlopen(req, timeout=timeout)
+    except urllib.error.HTTPError as e:
+        return e      # agents answer errors as JSON; the caller reads it
+
+
+def _agent_json(registry, mid, method, path, body=None, timeout=60):
+    data = json.dumps(body).encode() if body is not None else None
+    hdr = {"Content-Type": "application/json"} if data is not None else None
+    with _agent_call(registry, mid, method, path, data, hdr, timeout) as r:
+        return json.loads(r.read() or b"{}")
+
+
+def _move_job(job, registry, src, dst, sid, cwd):
+    from urllib.parse import quote
+    tmp = Path.home() / ".csm-run" / f"move-{sid}.tar.gz"
+
+    def fail(msg):
+        job.update(state="failed", error=_MOVE_MSG.get(msg, msg))
+
+    try:
+        job["stage"] = "check"
+        si = _agent_json(registry, src, "GET", f"session/info?sessionId={sid}")
+        if si.get("error") or not si.get("found"):
+            return fail(si.get("error") or "not found")
+        if si.get("live"):
+            return fail("live")
+        ti = _agent_json(registry, dst, "GET", f"session/info?sessionId={sid}&cwd={quote(cwd)}")
+        if not ti.get("dir_ok"):
+            return fail(f"대상 폴더가 없습니다: {cwd}")
+        if ti.get("live"):
+            return fail("대상 머신에서 같은 세션이 실행 중입니다")
+        job["total"] = si.get("size") or 0
+        if src == dst:
+            job["stage"] = "relocate"
+            r = _agent_json(registry, dst, "POST", "session/relocate",
+                            {"sessionId": sid, "cwd": cwd}, timeout=900)
+            if r.get("error"):
+                return fail(r["error"])
+            return job.update(state="done", cwd=r["cwd"])
+        job["stage"] = "pack"   # the source packs it before the first byte comes back
+        with _agent_call(registry, src, "GET", f"session/export?sessionId={sid}", timeout=900) as r:
+            if r.getcode() != 200:
+                return fail(json.loads(r.read() or b"{}").get("error") or f"HTTP {r.status}")
+            job["stage"], job["bytes"] = "download", 0
+            job["total"] = int(r.headers.get("Content-Length") or 0)
+            with tmp.open("wb") as fh:
+                while True:
+                    b = r.read(1 << 20)
+                    if not b:
+                        break
+                    fh.write(b)
+                    job["bytes"] += len(b)
+        job["stage"], job["bytes"] = "upload", 0
+        q = (f"sessionId={sid}&cwd={quote(cwd)}&srcCwd={quote(si.get('cwd') or '')}"
+             f"&name={quote(si.get('name') or '')}")
+        with tmp.open("rb") as fh:
+            with _agent_call(registry, dst, "POST", f"session/import?{q}", _Counted(fh, job),
+                             {"Content-Type": "application/gzip",
+                              "Content-Length": str(tmp.stat().st_size)}, timeout=900) as r:
+                res = json.loads(r.read() or b"{}")
+        if res.get("error"):
+            return fail(res["error"])
+        job["stage"] = "archive"
+        name = (registry["by_id"].get(dst) or {}).get("name") or dst
+        a = _agent_json(registry, src, "POST", "session/archive",
+                        {"sessionId": sid, "to": name, "cwd": res["cwd"]})
+        job.update(state="done", cwd=res["cwd"],
+                   warning=("원래 머신의 사본을 치우지 못했습니다: " + a["error"]) if a.get("error") else "")
+    except Exception as e:
+        fail(f"{type(e).__name__}: {e}")
+    finally:
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+
+
 def _make_handler(cfg: dict):
     registry = {"by_id": {}, "cfg": cfg}
 
@@ -127,6 +238,11 @@ def _make_handler(cfg: dict):
                 return self._manager()
             if u.path == "/api/prefs":
                 return self._json({"ui": load_config().get("ui") or {}})
+            if u.path == "/api/move":
+                from urllib.parse import parse_qs
+                tok = parse_qs(u.query).get("token", [""])[0]
+                job = _moves.get(tok)
+                return self._json(job if job else {"error": "unknown move"}, 200 if job else 404)
             if u.path.startswith("/api/m/"):
                 return self._proxy("GET")
             return self._json({"error": "not found"}, 404)
@@ -151,6 +267,8 @@ def _make_handler(cfg: dict):
                 return self._json({"ok": True, "ui": ui})
             if p == "/api/terminal":
                 return self._terminal()
+            if p == "/api/move":
+                return self._move()
             if p == "/api/deploy":
                 return self._deploy()
             if p == "/api/machines/add":
@@ -262,6 +380,24 @@ def _make_handler(cfg: dict):
                 return self._json(r)
             except Exception as e:
                 return self._json({"ok": False, "error": str(e), "cmd": cmd})
+
+        def _move(self):
+            import secrets as _secrets
+            import threading
+            b = self._read_body() or {}
+            src, dst = b.get("from") or "", b.get("to") or ""
+            sid, cwd = (b.get("sessionId") or "").strip(), (b.get("cwd") or "").strip()
+            refresh()
+            if src not in registry["by_id"] or dst not in registry["by_id"] or not sid or not cwd:
+                return self._json({"error": "from/to/sessionId/cwd required"}, 400)
+            if any(j["sessionId"] == sid and j["state"] == "running" for j in _moves.values()):
+                return self._json({"error": "이 세션은 이미 옮기는 중입니다"}, 409)
+            tok = _secrets.token_hex(8)
+            _moves[tok] = {"state": "running", "stage": "start", "bytes": 0, "total": 0,
+                           "sessionId": sid, "to": dst, "cwd": cwd, "error": ""}
+            threading.Thread(target=_move_job, args=(_moves[tok], registry, src, dst, sid, cwd),
+                             daemon=True).start()
+            return self._json({"ok": True, "token": tok})
 
         def _m_add(self):
             import re as _re

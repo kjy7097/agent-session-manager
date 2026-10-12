@@ -34,6 +34,12 @@ all from one browser tab. No more SSHing into each box and typing
   set server-saved defaults from the header. Effort is passed as `--effort`, so a
   session runs at the level you picked regardless of what that machine's
   `effortLevel` setting says.
+- **Move a session to another machine or folder** — a Claude session can be
+  picked up and continued elsewhere: another machine (macOS ↔ Windows works), or
+  another folder on the same one. The transcript is copied over and its working
+  folder re-pointed; the project's files themselves are not copied, so the
+  folder must already exist there. The old copy is kept out of sight in
+  `~/.claude/.csm-moved/`, not deleted.
 - **Rewind & cross-agent switch** — branch a new session from any point in a
   transcript, or continue the conversation in the *other* agent (🟧 Claude ↔ 🟢 Codex).
 - **Browse by folder**, per machine; **search sessions** by title *and conversation

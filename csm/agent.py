@@ -16,6 +16,7 @@ import json
 import os
 import platform
 import secrets
+import shutil
 import socket
 import subprocess
 import sys
@@ -25,7 +26,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
-from . import __version__, accounts, codex, common, skills
+from . import __version__, accounts, codex, common, move, skills
 from .config import load_config
 
 HERE = Path(__file__).resolve().parent
@@ -610,6 +611,11 @@ def _make_handler(agent: Agent):
                 except ValueError:
                     lim = 60
                 return self._send(agent.search_all(term, lim))
+            if u.path == "/session/info":
+                return self._send(move.info((q.get("sessionId") or [""])[0],
+                                            (q.get("cwd") or [""])[0]))
+            if u.path == "/session/export":
+                return self._export((q.get("sessionId") or [""])[0])
             if u.path == "/accounts":
                 return self._send(accounts.list_accounts())
             if u.path == "/skills":
@@ -622,7 +628,16 @@ def _make_handler(agent: Agent):
             if not self._authed():
                 return self._send({"error": "unauthorized"}, 401)
             u = urlparse(self.path)
+            if u.path == "/session/import":
+                return self._import(parse_qs(u.query))
             body = self._read_json()
+            if u.path == "/session/relocate":
+                b = body or {}
+                return self._send(move.relocate(b.get("sessionId") or "", b.get("cwd") or ""))
+            if u.path == "/session/archive":
+                b = body or {}
+                return self._send(move.archive(b.get("sessionId") or "",
+                                               {"to": b.get("to") or "", "toCwd": b.get("cwd") or ""}))
             if u.path == "/launch":
                 if not body or not body.get("cwd"):
                     return self._send({"error": "cwd required"}, 400)
@@ -690,6 +705,47 @@ def _make_handler(agent: Agent):
                 return self._send(agent.delete(sid))
             return self._send({"error": "not found"}, 404)
 
+        # A transcript can be close to a gigabyte, so a move goes through a
+        # file on disk at both ends, never through memory.
+        def _export(self, sid):
+            tmp = _incoming_dir() / f"out-{secrets.token_hex(6)}.tar.gz"
+            try:
+                r = move.export(sid, tmp)
+                if r.get("error"):
+                    return self._send(r, 409 if r["error"] == "live" else 404)
+                size = tmp.stat().st_size
+                self.send_response(200)
+                self.send_header("Content-Type", "application/gzip")
+                self.send_header("Content-Length", str(size))
+                self.end_headers()
+                with tmp.open("rb") as fh:
+                    shutil.copyfileobj(fh, self.wfile, 1 << 20)
+            finally:
+                tmp.unlink(missing_ok=True)
+
+        def _import(self, q):
+            def arg(k):
+                return (q.get(k) or [""])[0]
+            n = int(self.headers.get("Content-Length", 0) or 0)
+            tmp = _incoming_dir() / f"in-{secrets.token_hex(6)}.tar.gz"
+            try:
+                with tmp.open("wb") as fh:
+                    left = n
+                    while left > 0:
+                        chunk = self.rfile.read(min(left, 1 << 20))
+                        if not chunk:
+                            break
+                        fh.write(chunk)
+                        left -= len(chunk)
+                if left > 0:
+                    return self._send({"error": "upload cut short"}, 400)
+                return self._send(move.import_tar(arg("sessionId"), tmp, arg("srcCwd"),
+                                                  arg("cwd"), arg("name")))
+            except Exception as e:
+                return self._send({"error": f"import failed: {e}"}, 500)
+            finally:
+                tmp.unlink(missing_ok=True)
+
         def _read_json(self):
             try:
                 n = int(self.headers.get("Content-Length", 0))
@@ -703,6 +759,12 @@ def _make_handler(agent: Agent):
                 return None
 
     return Handler
+
+
+def _incoming_dir() -> Path:
+    d = common.claude_home() / ".csm-incoming"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
 
 
 def _which_claude() -> str:
