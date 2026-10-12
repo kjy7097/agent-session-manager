@@ -40,6 +40,16 @@ all from one browser tab. No more SSHing into each box and typing
   folder re-pointed; the project's files themselves are not copied, so the
   folder must already exist there. The old copy is kept out of sight in
   `~/.claude/.csm-moved/`, not deleted.
+- **Machines keep themselves up to date** — each agent runs `claude update`
+  as soon as its machine is online after a boot, then every 6 hours. The
+  control plane checks every 30s whether each remote agent runs the
+  *committed* code here (`git HEAD`, never a half-edited working tree); one that
+  was off and comes back behind gets the changed `csm/*.py` copied over SSH and
+  is restarted, once it has no launch or move in flight. If the new agent does
+  not answer within two minutes the previous files are put back. Status is at
+  `GET /api/updates`. Opt out with `"autoUpdateClaude": false` in a machine's
+  agent config, or `"autoUpdate": false` on a machine entry in the control
+  config.
 - **Rewind & cross-agent switch** — branch a new session from any point in a
   transcript, or continue the conversation in the *other* agent (🟧 Claude ↔ 🟢 Codex).
 - **Browse by folder**, per machine; **search sessions** by title *and conversation

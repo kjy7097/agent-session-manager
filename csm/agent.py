@@ -26,7 +26,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
-from . import __version__, accounts, codex, common, move, skills
+from . import __version__, accounts, codex, common, move, skills, updater
 from .config import load_config
 
 HERE = Path(__file__).resolve().parent
@@ -135,6 +135,11 @@ class Agent:
             "claudePath": self.claude_path,
             "claudeHome": str(common.claude_home()),
             "agentVersion": __version__,
+            # what the control plane compares against its committed code
+            "codeFiles": updater.LOADED,
+            # a restart now would lose track of these launches
+            "busy": any(r.get("state") == "spawning" for r in list(_launches.values())),
+            "claudeUpdate": updater.claude_status(),
         }
 
     def folders(self, with_codex: bool = True) -> dict:
@@ -795,6 +800,7 @@ def main():
     # restart (Windows would otherwise block on a TIME_WAIT socket). Duplicate
     # instances are prevented by running a single scheduled task, not here.
     httpd = ThreadingHTTPServer((host, port), _make_handler(agent))
+    updater.start_claude_updates(cfg, agent.claude_path)
     sys.stderr.write(f"csm-agent {__version__} on http://{host}:{port} (claude={agent.claude_path})\n")
     httpd.serve_forever()
 

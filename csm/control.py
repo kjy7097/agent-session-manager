@@ -18,7 +18,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 
-from . import __version__
+from . import __version__, updater
 from .config import load_config
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
@@ -243,6 +243,8 @@ def _make_handler(cfg: dict):
                 tok = parse_qs(u.query).get("token", [""])[0]
                 job = _moves.get(tok)
                 return self._json(job if job else {"error": "unknown move"}, 200 if job else 404)
+            if u.path == "/api/updates":
+                return self._json({"machines": updater.status})
             if u.path.startswith("/api/m/"):
                 return self._proxy("GET")
             return self._json({"error": "not found"}, 404)
@@ -394,7 +396,7 @@ def _make_handler(cfg: dict):
                 return self._json({"error": "이 세션은 이미 옮기는 중입니다"}, 409)
             tok = _secrets.token_hex(8)
             _moves[tok] = {"state": "running", "stage": "start", "bytes": 0, "total": 0,
-                           "sessionId": sid, "to": dst, "cwd": cwd, "error": ""}
+                           "sessionId": sid, "from": src, "to": dst, "cwd": cwd, "error": ""}
             threading.Thread(target=_move_job, args=(_moves[tok], registry, src, dst, sid, cwd),
                              daemon=True).start()
             return self._json({"ok": True, "token": tok})
@@ -602,11 +604,33 @@ def _make_handler(cfg: dict):
     return Handler
 
 
+def _start_code_sync():
+    def machines():
+        return load_config().get("machines", [])
+
+    def health(mid):
+        cfg = load_config()
+        reg = {"cfg": cfg, "by_id": {m["id"]: m for m in build_registry(cfg)}}
+        try:
+            h = _agent_json(reg, mid, "GET", "health", timeout=8)
+        except (OSError, ValueError, RuntimeError):
+            return None
+        return h if h.get("ok") else None
+
+    def busy(mid):
+        # a restart in the middle of a move breaks the transfer
+        return any(j.get("state") == "running" and mid in (j.get("from"), j.get("to"))
+                   for j in list(_moves.values()))
+
+    updater.start_code_sync(machines, health, busy)
+
+
 def main():
     cfg = load_config()
     host = cfg["control"]["host"]
     port = int(cfg["control"]["port"])
     httpd = ThreadingHTTPServer((host, port), _make_handler(cfg))
+    _start_code_sync()
     n = len(build_registry(cfg))
     sys.stderr.write(
         f"csm-control {__version__} on http://{host}:{port}  ({n} machine(s))\n"

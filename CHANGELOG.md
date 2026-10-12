@@ -18,6 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   copy moves to `~/.claude/.csm-moved/<id>/` rather than being deleted, so one
   session id is never live in two places. Moving within a machine re-points it
   in place, with no copy over the wire.
+- **Machines update themselves.** Each agent runs `claude update` once its
+  machine is online after a boot and every 6 hours after that, so a machine
+  that was off — or only ever runs sessions launched from here — no longer
+  falls behind. The control plane copies the committed `csm/*.py` over SSH to
+  any remote agent that comes back running different code, restarts it when
+  nothing is in flight, and restores the previous files if it does not come
+  back. `GET /api/updates` shows where each machine stands.
 - **Pick the organization at sign-in**, and accounts in an organization that
   blocks Remote Control are marked; opening a session with one is refused at
   once with the reason instead of timing out.
