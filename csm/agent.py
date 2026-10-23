@@ -766,6 +766,23 @@ def _make_handler(agent: Agent):
     return Handler
 
 
+def _warm_summaries():
+    """Build the transcript summaries before anyone opens a folder. The first
+    pass on a machine reads every transcript (100s on one PC here) and the
+    page would sit at "loading" through it; after that it is saved on disk and
+    this pass only stats files."""
+    from . import scancache
+    try:
+        codex.list_folders()
+        pdir = common.projects_dir()
+        if pdir.is_dir():
+            for f in pdir.glob("*/*.jsonl"):
+                common.parse_session(f)
+        scancache.flush("claude")
+    except Exception as e:      # a warm cache is a nicety; never take the agent down
+        sys.stderr.write(f"[warm] {e}\n")
+
+
 def _incoming_dir() -> Path:
     d = common.claude_home() / ".csm-incoming"
     d.mkdir(parents=True, exist_ok=True)
@@ -801,6 +818,7 @@ def main():
     # instances are prevented by running a single scheduled task, not here.
     httpd = ThreadingHTTPServer((host, port), _make_handler(agent))
     updater.start_claude_updates(cfg, agent.claude_path)
+    threading.Thread(target=_warm_summaries, daemon=True, name="warm").start()
     sys.stderr.write(f"csm-agent {__version__} on http://{host}:{port} (claude={agent.claude_path})\n")
     httpd.serve_forever()
 
