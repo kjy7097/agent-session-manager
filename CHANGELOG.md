@@ -30,6 +30,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   once with the reason instead of timing out.
 
 ### Fixed
+- **Opening a folder took seconds, however few sessions it had.** Every click
+  read every Codex rollout in full (4.7GB over 643 files here, ~6s), and any
+  Claude transcript that had changed since — a live session, hundreds of MB —
+  from the start again. Each transcript's summary is now kept with how far into
+  the file it got, so an unchanged file costs a stat and a growing one only its
+  new lines, and the summaries are saved under `~/.claude/.csm-cache/` so a
+  restart keeps them. A big folder went from 10s to 0.05s.
 - **Sessions in a not-yet-trusted folder exited at once on macOS.** The
   launcher's "1.5s since the last answer" guard started from 0.0, and on a
   clock that starts with the process the trust prompt arrived inside that

@@ -181,27 +181,85 @@ def _all_rollouts():
             yield f
 
 
+def _new_state() -> dict:
+    return {"sid": None, "cwd": None, "first_prompt": None, "model": None,
+            "msg_count": 0, "last_ts": ""}
+
+
+def _feed(st: dict, o: dict) -> None:
+    """Fold one rollout record into a summary (parse_rollout without messages)."""
+    t = o.get("type")
+    p = o.get("payload") or {}
+    ts = o.get("timestamp") or ""
+    if ts:
+        st["last_ts"] = max(st["last_ts"], ts)
+    if t == "session_meta":
+        st["sid"] = p.get("id") or st["sid"]
+        st["cwd"] = p.get("cwd") or st["cwd"]
+    elif t == "turn_context" and p.get("model"):
+        st["model"] = p["model"]
+    elif t == "response_item" and p.get("role") in ("user", "assistant"):
+        txt = _text(p.get("content")).strip()
+        if txt and not txt.startswith("<"):
+            st["msg_count"] += 1
+            if p["role"] == "user" and st["first_prompt"] is None:
+                st["first_prompt"] = txt[:200]
+
+
+def _summary(path: Path) -> dict | None:
+    """parse_rollout's row, from the incremental cache (scancache)."""
+    from . import scancache
+    from .common import _epoch
+    st = scancache.scan("codex", path, _new_state, _feed)
+    if st is None:
+        return None
+    try:
+        mtime = path.stat().st_mtime
+    except OSError:
+        mtime = 0.0
+    return {
+        "session_id": st["sid"] or path.stem.split("-", 1)[-1][-36:],
+        "agent": "codex",
+        "cwd": st["cwd"],
+        "title": st["first_prompt"] or "(no title)",
+        "first_prompt": st["first_prompt"] or "",
+        "last_activity": _epoch(st["last_ts"]) or mtime,
+        "msg_count": st["msg_count"],
+        "model": st["model"] or "",
+        "git_branch": "",
+        "is_remote_control": False,
+        "bridge_session_id": None,
+        "is_live": False,
+        "bridge_url": None,
+        "rollout_path": str(path),
+    }
+
+
 def list_sessions_for_cwd(cwd: str) -> list[dict]:
+    from . import scancache
     cwd = os.path.realpath(os.path.expanduser(cwd))
     rows = []
     for f in _all_rollouts():
-        r = parse_rollout(f)
+        r = _summary(f)
         if r and r.get("cwd") and os.path.realpath(r["cwd"]) == cwd:
             rows.append(r)
+    scancache.flush("codex")
     rows.sort(key=lambda r: r.get("last_activity") or 0, reverse=True)
     return rows
 
 
 def list_folders() -> list[dict]:
     """cwd -> {cwd, session_count, last_activity} for codex sessions."""
+    from . import scancache
     by_cwd: dict[str, dict] = {}
     for f in _all_rollouts():
-        r = parse_rollout(f)
+        r = _summary(f)
         if not r or not r.get("cwd"):
             continue
         g = by_cwd.setdefault(r["cwd"], {"cwd": r["cwd"], "session_count": 0, "last_activity": 0})
         g["session_count"] += 1
         g["last_activity"] = max(g["last_activity"], r.get("last_activity") or 0)
+    scancache.flush("codex")
     return list(by_cwd.values())
 
 
@@ -377,8 +435,10 @@ def transcript(session_id: str) -> dict:
                     "total": len(r["messages"]), "messages": r["messages"]}
     # slow path (meta id may differ from filename)
     for f in _all_rollouts():
-        r = parse_rollout(f, want_msgs=True)
+        r = _summary(f)
         if r and r["session_id"] == session_id:
+            r = parse_rollout(f, want_msgs=True)
+        if r and r["session_id"] == session_id and "messages" in r:
             return {"session_id": session_id, "agent": "codex", "title": r["title"],
                     "total": len(r["messages"]), "messages": r["messages"]}
     return {"error": "not found"}
@@ -395,7 +455,7 @@ def delete(session_id: str) -> dict:
                 return {"ok": False, "reason": str(e)}
     # slow path: id only inside the file's session_meta
     for f in _all_rollouts():
-        r = parse_rollout(f)
+        r = _summary(f)
         if r and r["session_id"] == session_id:
             try:
                 f.unlink()

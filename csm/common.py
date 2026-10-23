@@ -102,125 +102,97 @@ def _iso(ms_or_str):
     return ms_or_str
 
 
-_parse_cache: dict = {}     # str(path) -> ((size, mtime_ns), row)
+def _new_state() -> dict:
+    return {"cwd": None, "ai_title": None, "first_prompt": None, "git_branch": None,
+            "bridge_session_id": None, "is_remote_control": False, "msg_count": 0,
+            "last_ts": 0.0, "model": None}
 
 
-def parse_session(path: Path, find: str = "") -> dict:
-    """Cached wrapper: a transcript is only re-read when it has changed.
+def _feed(st: dict, obj: dict) -> None:
+    """Fold one transcript record into a session summary."""
+    t = obj.get("type")
+    if st["cwd"] is None and obj.get("cwd"):
+        st["cwd"] = obj["cwd"]
+    if st["git_branch"] is None and obj.get("gitBranch"):
+        st["git_branch"] = obj["gitBranch"]
+    ts = obj.get("timestamp")
+    if isinstance(ts, str):
+        st["last_ts"] = max(st["last_ts"], _epoch(ts))
+    if t == "ai-title":
+        st["ai_title"] = obj.get("aiTitle") or st["ai_title"]
+    elif t == "user":
+        st["msg_count"] += 1
+        if st["first_prompt"] is None and not obj.get("isMeta"):
+            msg = obj.get("message") or {}
+            txt = _text(msg.get("content")).strip()
+            if txt and not txt.startswith("<"):
+                st["first_prompt"] = txt[:200]
+    elif t == "assistant":
+        st["msg_count"] += 1
+        _m = (obj.get("message") or {}).get("model")
+        if _m:
+            st["model"] = _m   # last one wins = current model
+    elif t == "bridge-session":
+        st["is_remote_control"] = True
+        st["bridge_session_id"] = obj.get("bridgeSessionId") or st["bridge_session_id"]
+    elif t == "system" and obj.get("subtype") == "bridge_status":
+        st["is_remote_control"] = True
 
-    Every folder click lists every session in it, and one transcript here is
-    539MB — a full second per click for a file that may not have changed in
-    days. Size plus mtime is enough to tell; a search (`find`) always reads,
-    since its snippet depends on the term."""
-    if find:
-        return _parse_session(path, find)
-    try:
-        st = path.stat()
-        key = (st.st_size, st.st_mtime_ns)
-    except OSError:
-        return _parse_session(path, find)
-    hit = _parse_cache.get(str(path))
-    if hit and hit[0] == key:
-        return dict(hit[1])
-    row = _parse_session(path, find)
-    _parse_cache[str(path)] = (key, dict(row))
-    return row
 
-
-def _parse_session(path: Path, find: str = "") -> dict:
-    """Single-pass parse of one session jsonl into a picker row.
-
-    Returns keys: session_id, cwd, title, first_prompt, last_activity (epoch
-    seconds), msg_count, git_branch, is_remote_control, bridge_session_id.
-
-    `find` (already lowercased) also collects a `snippet` showing where the term
-    occurs. It rides along on this pass on purpose: search would otherwise read
-    every matched transcript twice, and these files reach 100MB.
-    """
-    finds = _str_needles(find) if find else ()
-    session_id = path.stem
-    cwd = None
-    ai_title = None
-    first_prompt = None
-    git_branch = None
-    bridge_session_id = None
-    is_remote_control = False
-    msg_count = 0
-    last_ts = 0.0
-    model = None
-    snippet = None
-    scanned = 0
-
-    try:
-        with path.open(encoding="utf-8", errors="replace") as fh:
-            for line in fh:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    obj = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-
-                if finds and snippet is None and scanned <= SNIPPET_BYTE_CAP:
-                    scanned += len(line)
-                    low = line.lower()
-                    if any(n in low for n in finds):
-                        snippet = _record_snippet(obj, find)
-
-                t = obj.get("type")
-                if cwd is None and obj.get("cwd"):
-                    cwd = obj["cwd"]
-                if git_branch is None and obj.get("gitBranch"):
-                    git_branch = obj["gitBranch"]
-
-                ts = obj.get("timestamp")
-                if isinstance(ts, str):
-                    # cheap lexical compare via parsed epoch fallback to mtime later
-                    last_ts = max(last_ts, _epoch(ts))
-
-                if t == "ai-title":
-                    ai_title = obj.get("aiTitle") or ai_title
-                elif t == "user":
-                    msg_count += 1
-                    if first_prompt is None and not obj.get("isMeta"):
-                        msg = obj.get("message") or {}
-                        txt = _text(msg.get("content")).strip()
-                        if txt and not txt.startswith("<"):
-                            first_prompt = txt[:200]
-                elif t == "assistant":
-                    msg_count += 1
-                    _m = (obj.get("message") or {}).get("model")
-                    if _m:
-                        model = _m   # last one wins = current model
-                elif t == "bridge-session":
-                    is_remote_control = True
-                    bridge_session_id = obj.get("bridgeSessionId") or bridge_session_id
-                elif t == "system" and obj.get("subtype") == "bridge_status":
-                    is_remote_control = True
-    except OSError:
-        pass
-
+def _row(path: Path, st: dict, snippet: str = "") -> dict:
     try:
         mtime = path.stat().st_mtime
     except OSError:
         mtime = 0.0
-    last_activity = last_ts or mtime
-
-    title = ai_title or first_prompt or "(no title)"
     return {
-        "session_id": session_id,
-        "cwd": cwd,
-        "title": title,
-        "first_prompt": first_prompt or "",
+        "session_id": path.stem,
+        "cwd": st["cwd"],
+        "title": st["ai_title"] or st["first_prompt"] or "(no title)",
+        "first_prompt": st["first_prompt"] or "",
         "snippet": snippet or "",
-        "last_activity": last_activity,
-        "msg_count": msg_count,
-        "git_branch": git_branch or "",
-        "is_remote_control": is_remote_control,
-        "bridge_session_id": bridge_session_id,
-        "model": model or "",
+        "last_activity": st["last_ts"] or mtime,
+        "msg_count": st["msg_count"],
+        "git_branch": st["git_branch"] or "",
+        "is_remote_control": st["is_remote_control"],
+        "bridge_session_id": st["bridge_session_id"],
+        "model": st["model"] or "",
     }
+
+
+def parse_session(path: Path, find: str = "") -> dict:
+    """One session jsonl -> a picker row.
+
+    Returns keys: session_id, cwd, title, first_prompt, last_activity (epoch
+    seconds), msg_count, git_branch, is_remote_control, bridge_session_id.
+
+    Every folder click lists every session in it, and transcripts here reach
+    hundreds of MB, so the summary is kept and only appended lines are read
+    (scancache). A search (`find`, already lowercased) always reads in full,
+    since its snippet depends on the term; it rides along on the same pass so
+    a matched transcript is not read twice.
+    """
+    from . import scancache
+    if not find:
+        st = scancache.scan("claude", path, _new_state, _feed)
+        return _row(path, st if st is not None else _new_state())
+    finds = _str_needles(find)
+    st = _new_state()
+    hit = {"snippet": None, "scanned": 0}
+
+    def feed(state, obj, raw):
+        _feed(state, obj)
+        if hit["snippet"] is None and hit["scanned"] <= SNIPPET_BYTE_CAP:
+            line = raw.decode("utf-8", "replace").strip()
+            hit["scanned"] += len(line)
+            low = line.lower()
+            if any(n in low for n in finds):
+                hit["snippet"] = _record_snippet(obj, find)
+    try:
+        with path.open("rb") as fh:
+            scancache.feed_lines(fh, st, feed, 0, with_line=True)
+    except OSError:
+        pass
+    return _row(path, st, hit["snippet"] or "")
 
 
 def session_preview(session_id: str, limit: int = 40) -> dict:
@@ -391,6 +363,8 @@ def list_sessions_for_cwd(cwd: str) -> list[dict]:
             }
         )
     rows.sort(key=lambda r: r["last_activity"], reverse=True)
+    from . import scancache
+    scancache.flush("claude")
     return rows
 
 
