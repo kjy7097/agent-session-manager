@@ -174,35 +174,26 @@ def parse_session(path: Path, find: str = "") -> dict:
     st = scancache.scan("claude", path, _new_state, _feed)
     row = _row(path, st if st is not None else _new_state())
     if find:
-        row["snippet"] = _snippet_in(path, find)
+        row["snippet"] = _text_snippet(path, find)
     return row
 
 
-def _snippet_in(path: Path, q: str) -> str:
-    """Where `q` (lowercased) first shows up in a transcript. Only lines that
-    hold the term as bytes are parsed — the rest of a matched transcript
-    (hundreds of MB) is never decoded — and at most SNIPPET_BYTE_CAP is read."""
-    finds = [n.encode("utf-8") for n in _str_needles(q)]
-    scanned = 0
-    try:
-        with path.open("rb") as fh:
-            for line in fh:
-                scanned += len(line)
-                if scanned > SNIPPET_BYTE_CAP:
-                    break
-                if not any(n in line.lower() for n in finds):
-                    continue
-                try:
-                    obj = json.loads(line)
-                except ValueError:
-                    continue
-                if isinstance(obj, dict):
-                    snip = _record_snippet(obj, q)
-                    if snip:
-                        return snip
-    except OSError:
-        pass
-    return ""
+def _text_snippet(path: Path, q: str) -> str:
+    """Where `q` (lowercased) shows up in a transcript's text: the
+    conversation first, then thinking and tool calls."""
+    from . import textindex
+    other = ""
+    qn = _norm(q)
+    for kind, txt in textindex.lines(path):
+        low = txt.lower()
+        # cheap test first: _find_loose maps every character to find a match
+        if q not in low and (not qn or qn not in low.replace(" ", "")):
+            continue
+        if kind == "C":
+            return _snip(txt, q)
+        if not other:
+            other = _snip(txt, q)
+    return other
 
 
 def session_preview(session_id: str, limit: int = 40) -> dict:
@@ -483,6 +474,7 @@ def search_sessions(cwd: str, query: str) -> list[dict]:
     q = (query or "").strip().lower()
     if not q:
         return rows
+    from . import textindex
     out = []
     for r in rows:
         snip = _match_snippet(r, q)
@@ -490,6 +482,7 @@ def search_sessions(cwd: str, query: str) -> list[dict]:
             r = dict(r)
             r["snippet"] = snip
             out.append(r)
+    textindex.flush()
     return out
 
 
@@ -508,8 +501,12 @@ def search_all_sessions(query: str, limit: int = 60,
     q = (query or "").strip()
     if not q:
         return {"sessions": [], "truncated": False, "scanned": 0, "matched": 0}
-    needles = _needles(q)
+    from . import textindex
     lowq = q.lower()
+    needles = [lowq.encode("utf-8")]
+    # Korean is written with whatever spacing the writer chose, so a
+    # non-ASCII term also matches with the spaces squeezed out
+    loose = [needles[0].replace(b" ", b"")] if any(ord(c) > 127 for c in q) else []
 
     files = []
     pdir = projects_dir()
@@ -539,7 +536,7 @@ def search_all_sessions(query: str, limit: int = 60,
             break
         scanned += 1
         by_name = f.stem in named
-        if not by_name and not _file_has(f, needles):
+        if not by_name and not textindex.has(f, needles, loose):
             continue
         row = parse_session(f, find=lowq)
         row["account"] = session_accounts().get(row["session_id"])
@@ -561,6 +558,7 @@ def search_all_sessions(query: str, limit: int = 60,
                     break
         out.append(row)
 
+    textindex.flush()
     out.sort(key=lambda r: r.get("last_activity") or 0, reverse=True)
     return {"sessions": out, "truncated": truncated,
             "scanned": scanned, "matched": len(out)}
@@ -572,127 +570,21 @@ def _norm(s: str) -> str:
     return (s or "").lower().replace(" ", "")
 
 
-def _escape_form(s: str) -> str:
-    r"""How a string looks inside a jsonl when the writer escaped it: non-ASCII
-    as \uXXXX, everything else literal. json.dumps never escapes a space, so
-    escaping one would make a multi-word term unfindable."""
-    return "".join(("\\u%04x" % ord(c)) if ord(c) > 127 else c for c in s)
-
-
-def _needles(q: str) -> list[bytes]:
-    r"""Byte patterns to look for. A jsonl mixes raw UTF-8 with \uXXXX escapes
-    (both appear in the same file), so a non-ASCII term needs both forms."""
-    lowq = q.lower()
-    out = [lowq.encode("utf-8")]
-    if any(ord(c) > 127 for c in q):
-        out.append(_escape_form(lowq).encode("utf-8"))
-    return out
-
-
-def _file_has(path: Path, needles: list[bytes], chunk: int = 1 << 20) -> bool:
-    """Case-insensitive byte scan. bytes.lower() only folds ASCII, which is
-    exactly right: Hangul and other scripts here have no case to fold."""
-    longest = max(len(n) for n in needles)
-    # Squeezing spaces out of every chunk costs a copy of the whole file, so do
-    # it only where it pays: Korean and the like, written with whatever spacing
-    # the writer chose. An ASCII term is looked for as typed.
-    loose = any(b >= 0x80 for n in needles for b in n)
-    squeezed_needles = [n.replace(b" ", b"") for n in needles] if loose else []
-    try:
-        with path.open("rb") as fh:
-            tail = b""
-            while True:
-                buf = fh.read(chunk)
-                if not buf:
-                    return False
-                window = (tail + buf).lower()
-                for n in needles:
-                    if n in window:
-                        return True
-                if squeezed_needles:
-                    flat = window.replace(b" ", b"")
-                    for n in squeezed_needles:
-                        if n in flat:
-                            return True
-                tail = buf[-(longest - 1):] if longest > 1 else b""
-    except OSError:
-        return False
-
-
 def _match_snippet(row: dict, q: str) -> str | None:
     """The snippet for a session whose title, first prompt or conversation
-    holds `q`, or None. Only lines that contain the term as bytes are parsed;
-    the rest of a transcript is never decoded."""
+    holds `q`, or None. Reads the transcript's extracted text (textindex),
+    not the transcript."""
+    from . import textindex
     for field in (row.get("title"), row.get("first_prompt")):
         if field and q in field.lower():
             return _snip(field, q)
     f = find_session_file(row.get("session_id", ""))
     if f is None:
         return None
-    needles = _needles(q)
-    try:
-        with f.open("rb") as fh:
-            for line in fh:
-                low = line.lower()
-                if not any(n in low for n in needles):
-                    continue
-                try:
-                    obj = json.loads(line)
-                except ValueError:
-                    continue
-                if not isinstance(obj, dict):
-                    continue
-                if obj.get("type") in ("user", "assistant") and not obj.get("isMeta"):
-                    txt = _text((obj.get("message") or {}).get("content"))
-                    if txt and q in txt.lower():
-                        return _snip(txt, q)
-    except OSError:
-        pass
-    return None
-
-
-# A matched session gets at most this many bytes read while looking for
-# something to show. Transcripts here reach 100MB+, and the hit is almost always
-# early; without a cap one giant file would eat the whole search budget.
-SNIPPET_BYTE_CAP = 24 << 20
-
-
-def _str_needles(q: str) -> tuple:
-    r"""Forms of the term as they appear in a jsonl text line: the term itself,
-    plus its \uXXXX escape, since a file mixes both."""
-    out = [q]
-    if any(ord(c) > 127 for c in q):
-        out.append(_escape_form(q))
-    return tuple(out + [n.replace(" ", "") for n in out if " " in n])
-
-
-def _record_snippet(obj: dict, q: str) -> str | None:
-    """Where the term shows up in one record. Prefers the conversation, then
-    falls back to any text in it — a tool result, a path, a command — because
-    the scan that picked this file looks at those too."""
-    if obj.get("type") in ("user", "assistant") and not obj.get("isMeta"):
-        txt = _text((obj.get("message") or {}).get("content"))
-        if txt and _find_loose(txt, q)[0] >= 0:
-            return _snip(txt, q)
-    for txt in _walk_strings(obj):
-        if _find_loose(txt, q)[0] >= 0:
+    for kind, txt in textindex.lines(f):
+        if kind == "C" and q in txt.lower():
             return _snip(txt, q)
     return None
-
-
-def _walk_strings(obj, depth: int = 0):
-    """Every string in a decoded record, longest-lived containers first. Bounded
-    so one pathological record can't stall the search."""
-    if depth > 8:
-        return
-    if isinstance(obj, str):
-        yield obj
-    elif isinstance(obj, dict):
-        for v in obj.values():
-            yield from _walk_strings(v, depth + 1)
-    elif isinstance(obj, list):
-        for v in obj[:200]:
-            yield from _walk_strings(v, depth + 1)
 
 
 def _find_loose(text: str, q: str) -> tuple[int, int]:

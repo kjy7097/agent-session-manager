@@ -39,11 +39,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   restart keeps them. A big folder went from 10s to 0.05s. The agent builds
   them in the background when it starts, so the one slow first pass on a
   machine (100s on one PC) is not spent with a page waiting on it.
-- **Searching took up to 20s.** Every matched transcript was decoded in full,
-  hundreds of MB of JSON, just to fill in its title and find one snippet. The
-  row now comes from the saved summaries and only lines that contain the term
-  as bytes are parsed. Searching every session: 58s → 5s with the time budget
-  lifted; same results.
+- **Searching took up to 20s, and a common word matched every session.**
+  Search read every byte of every transcript (5GB on one PC), most of it
+  images and the API request claude logs on each turn — whose system prompt
+  and skill list put almost any word in every session — then decoded each
+  matched one in full to build its row. Each agent now keeps the searchable
+  text (conversation, thinking, tool calls and output; about 2% of the bytes)
+  extracted under `~/.claude/.csm-cache/text/`, updated with only what was
+  appended, and rows come from the saved summaries. Searching all 363
+  sessions on one machine: 7s, cut off by the time budget → 0.1–0.4s,
+  complete. Folder search returns the same sessions as before.
 - **Sessions in a not-yet-trusted folder exited at once on macOS.** The
   launcher's "1.5s since the last answer" guard started from 0.0, and on a
   clock that starts with the process the trust prompt arrived inside that

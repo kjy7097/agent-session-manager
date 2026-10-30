@@ -62,7 +62,11 @@ all from one browser tab. No more SSHing into each box and typing
 - **Search everything** — one box in the sidebar. Typing filters the folder list
   of every machine at once; Enter searches *all sessions on all machines*, each
   agent scanning its own disk in parallel and returning only the hits, with a
-  snippet showing where the term appeared.
+  snippet showing where the term appeared. It looks at what was said and done
+  — the conversation, thinking, tool calls and their output — not at the
+  images and logged API requests that make up most of a transcript; each agent
+  keeps that text extracted under `~/.claude/.csm-cache/text/`, so a search
+  reads about 2% of the bytes.
 - **Automatic skill sync** — your `~/.claude/skills` converge to the newest version
   of each skill across all machines (last-write-wins by mtime), excluding
   credential/encrypted files. Edit anywhere; it propagates.

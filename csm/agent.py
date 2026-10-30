@@ -767,18 +767,21 @@ def _make_handler(agent: Agent):
 
 
 def _warm_summaries():
-    """Build the transcript summaries before anyone opens a folder. The first
-    pass on a machine reads every transcript (100s on one PC here) and the
-    page would sit at "loading" through it; after that it is saved on disk and
-    this pass only stats files."""
-    from . import scancache
+    """Build the transcript summaries and search text before anyone opens a
+    folder or searches. The first pass on a machine reads every transcript
+    (100s on one PC here) and the page would sit at "loading" through it;
+    after that it is saved on disk and this pass only stats files."""
+    from . import scancache, textindex
     try:
         codex.list_folders()
         pdir = common.projects_dir()
         if pdir.is_dir():
             for f in pdir.glob("*/*.jsonl"):
                 common.parse_session(f)
-        scancache.flush("claude")
+            scancache.flush("claude")
+            for f in pdir.glob("*/*.jsonl"):   # what search reads
+                textindex.ensure(f)
+            textindex.flush()
     except Exception as e:      # a warm cache is a nicety; never take the agent down
         sys.stderr.write(f"[warm] {e}\n")
 
