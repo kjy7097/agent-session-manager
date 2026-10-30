@@ -39,6 +39,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   restart keeps them. A big folder went from 10s to 0.05s. The agent builds
   them in the background when it starts, so the one slow first pass on a
   machine (100s on one PC) is not spent with a page waiting on it.
+- **Searching took up to 20s.** Every matched transcript was decoded in full,
+  hundreds of MB of JSON, just to fill in its title and find one snippet. The
+  row now comes from the saved summaries and only lines that contain the term
+  as bytes are parsed. Searching every session: 58s → 5s with the time budget
+  lifted; same results.
 - **Sessions in a not-yet-trusted folder exited at once on macOS.** The
   launcher's "1.5s since the last answer" guard started from 0.0, and on a
   clock that starts with the process the trust prompt arrived inside that

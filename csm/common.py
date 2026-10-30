@@ -167,32 +167,42 @@ def parse_session(path: Path, find: str = "") -> dict:
 
     Every folder click lists every session in it, and transcripts here reach
     hundreds of MB, so the summary is kept and only appended lines are read
-    (scancache). A search (`find`, already lowercased) always reads in full,
-    since its snippet depends on the term; it rides along on the same pass so
-    a matched transcript is not read twice.
+    (scancache). `find` (already lowercased) adds a `snippet` showing where
+    the term occurs.
     """
     from . import scancache
-    if not find:
-        st = scancache.scan("claude", path, _new_state, _feed)
-        return _row(path, st if st is not None else _new_state())
-    finds = _str_needles(find)
-    st = _new_state()
-    hit = {"snippet": None, "scanned": 0}
+    st = scancache.scan("claude", path, _new_state, _feed)
+    row = _row(path, st if st is not None else _new_state())
+    if find:
+        row["snippet"] = _snippet_in(path, find)
+    return row
 
-    def feed(state, obj, raw):
-        _feed(state, obj)
-        if hit["snippet"] is None and hit["scanned"] <= SNIPPET_BYTE_CAP:
-            line = raw.decode("utf-8", "replace").strip()
-            hit["scanned"] += len(line)
-            low = line.lower()
-            if any(n in low for n in finds):
-                hit["snippet"] = _record_snippet(obj, find)
+
+def _snippet_in(path: Path, q: str) -> str:
+    """Where `q` (lowercased) first shows up in a transcript. Only lines that
+    hold the term as bytes are parsed — the rest of a matched transcript
+    (hundreds of MB) is never decoded — and at most SNIPPET_BYTE_CAP is read."""
+    finds = [n.encode("utf-8") for n in _str_needles(q)]
+    scanned = 0
     try:
         with path.open("rb") as fh:
-            scancache.feed_lines(fh, st, feed, 0, with_line=True)
+            for line in fh:
+                scanned += len(line)
+                if scanned > SNIPPET_BYTE_CAP:
+                    break
+                if not any(n in line.lower() for n in finds):
+                    continue
+                try:
+                    obj = json.loads(line)
+                except ValueError:
+                    continue
+                if isinstance(obj, dict):
+                    snip = _record_snippet(obj, q)
+                    if snip:
+                        return snip
     except OSError:
         pass
-    return _row(path, st, hit["snippet"] or "")
+    return ""
 
 
 def session_preview(session_id: str, limit: int = 40) -> dict:
@@ -610,21 +620,27 @@ def _file_has(path: Path, needles: list[bytes], chunk: int = 1 << 20) -> bool:
 
 
 def _match_snippet(row: dict, q: str) -> str | None:
+    """The snippet for a session whose title, first prompt or conversation
+    holds `q`, or None. Only lines that contain the term as bytes are parsed;
+    the rest of a transcript is never decoded."""
     for field in (row.get("title"), row.get("first_prompt")):
         if field and q in field.lower():
             return _snip(field, q)
     f = find_session_file(row.get("session_id", ""))
     if f is None:
         return None
+    needles = _needles(q)
     try:
-        with f.open(encoding="utf-8", errors="replace") as fh:
+        with f.open("rb") as fh:
             for line in fh:
-                line = line.strip()
-                if not line:
+                low = line.lower()
+                if not any(n in low for n in needles):
                     continue
                 try:
                     obj = json.loads(line)
-                except json.JSONDecodeError:
+                except ValueError:
+                    continue
+                if not isinstance(obj, dict):
                     continue
                 if obj.get("type") in ("user", "assistant") and not obj.get("isMeta"):
                     txt = _text((obj.get("message") or {}).get("content"))
