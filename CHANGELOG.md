@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Moving a session to another machine now copies it.** The session stays on
+  the machine it came from as well, instead of being put away in
+  `~/.claude/.csm-moved/`, and from then on the two carry on separately. A
+  running session can be copied too: it goes as it stands, up to its last
+  whole record. Within one machine it is still a move, since two transcripts
+  with one id on one machine would be the same session to claude.
+
 ### Added
 - **Move a session to another machine or folder.** "⇄ Move" on a Claude
   session picks a machine and a folder there, copies the transcript (and its

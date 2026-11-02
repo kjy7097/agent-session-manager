@@ -313,7 +313,7 @@
     <div id="pk-move" style="display:none;font-size:12px;color:var(--muted);padding:2px 2px 8px;line-height:1.5">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><span data-i18n="옮길 머신">옮길 머신</span>
         <select id="pk-machine" onchange="pkSwitchMachine(this.value)" style="background:var(--panel);color:var(--fg);border:1px solid var(--border);border-radius:6px;padding:4px 6px"></select></div>
-      <div data-i18n="대상 머신에 같은 프로젝트 폴더가 있어야 합니다 (코드는 옮기지 않습니다). 원래 머신의 사본은 숨겨지고 지워지지는 않습니다.">대상 머신에 같은 프로젝트 폴더가 있어야 합니다 (코드는 옮기지 않습니다). 원래 머신의 사본은 숨겨지고 지워지지는 않습니다.</div></div>
+      <div data-i18n="대상 머신에 같은 프로젝트 폴더가 있어야 합니다 (코드는 복사하지 않습니다). 다른 머신으로는 복사되어 원래 세션도 그대로 남고, 같은 머신의 다른 폴더로는 옮겨집니다.">대상 머신에 같은 프로젝트 폴더가 있어야 합니다 (코드는 복사하지 않습니다). 다른 머신으로는 복사되어 원래 세션도 그대로 남고, 같은 머신의 다른 폴더로는 옮겨집니다.</div></div>
     <div id="pk-hint" style="font-size:11px;color:var(--muted);padding:2px 2px 6px;line-height:1.5" data-i18n="🟢 Codex 세션이 앱에 뜨려면, 그 폴더를 Codex 데스크톱 앱에서도 프로젝트로 추가해야 합니다. 아래 목록엔 Codex 세션이 있는 폴더만 뜨고, Codex 세션이 없는 폴더는 직접 고르세요.">🟢 Codex 세션이 앱에 뜨려면, 그 폴더를 Codex 데스크톱 앱에서도 프로젝트로 추가해야 합니다. 아래 목록엔 Codex 세션이 있는 폴더만 뜨고, Codex 세션이 없는 폴더는 직접 고르세요.</div>
     <div class="crumbs" id="pk-crumbs"></div>
     <div id="pk-codex" style="display:none;padding:8px 4px;border-bottom:1px solid var(--border);max-height:168px;overflow:auto;flex:0 0 auto"></div>
@@ -412,12 +412,13 @@ const EN={
 "Codex 세션 생성 중… (응답까지 잠시)":"Starting Codex session… (takes a moment)","Codex 세션 생성됨":"Codex session started",
 "이 폴더의 파일":"Files in this folder","개 중 ":" total, showing ","개 표시":"","총 ":"",
 "실행 중인 세션은":"Stop running sessions first",
-"⇄ 옮기기":"⇄ Move","다른 머신이나 폴더로 옮겨서 이어가기":"Move to another machine or folder and continue there",
+"⇄ 옮기기":"⇄ Move","다른 머신에 복사하거나 다른 폴더로 옮겨서 이어가기":"Copy to another machine, or move to another folder, and continue there",
 "세션 옮기기":"Move session","옮길 머신":"Machine","(같은 머신)":"(same machine)","→ 여기로 옮기기":"→ Move here","옮기기":"Move",
-"대상 머신에 같은 프로젝트 폴더가 있어야 합니다 (코드는 옮기지 않습니다). 원래 머신의 사본은 숨겨지고 지워지지는 않습니다.":"The project folder must already exist on the target machine (code is not copied). The original copy is hidden, not deleted.",
+"대상 머신에 같은 프로젝트 폴더가 있어야 합니다 (코드는 복사하지 않습니다). 다른 머신으로는 복사되어 원래 세션도 그대로 남고, 같은 머신의 다른 폴더로는 옮겨집니다.":"The project folder must already exist on the target machine (code is not copied). To another machine the session is copied and the original stays; to another folder on the same machine it is moved.",
 "같은 폴더입니다":"That is the same folder","옮긴 뒤 대상 머신에서 바로 이어갑니다.":"It will be continued on the target machine right after.",
+"대상 머신에 복사한 뒤 바로 이어갑니다. 원래 세션도 그대로 남습니다.":"It is copied to the target machine and continued there. The original stays as it is.",
 "세션 옮기는 중…":"Moving session…","확인 중":"checking","폴더 옮기는 중":"moving","묶는 중":"packing","가져오는 중":"fetching","보내는 중":"sending","정리 중":"tidying up",
-"옮겼습니다 — 이어가는 중":"Moved — continuing"
+"옮겼습니다 — 이어가는 중":"Moved — continuing","복사했습니다 — 이어가는 중":"Copied — continuing"
 };
 const t=s=>LANG==="en"?(EN[s]!==undefined?EN[s]:s):s;
 function applyStatic(){
@@ -985,7 +986,7 @@ function sessionRow(s, mid, cwd){
         <button onclick='resume(${mj},${cj},${sj},false)'>${t("이어가기")}</button>
         <button class="ghost" onclick='resume(${mj},${cj},${sj},true)'>Fork</button>
         <button class="ghost" onclick='copyTermCmd(${mj},${cj},${sj},"claude")' title="${t("터미널에서 이어가기 (SSH 명령 복사)")}">⌨</button>
-        ${s.is_live?"":`<button class="ghost" onclick='openMovePicker(${mj},${cj},${sj})' title="${t("다른 머신이나 폴더로 옮겨서 이어가기")}">${t("⇄ 옮기기")}</button>`}
+        <button class="ghost" onclick='openMovePicker(${mj},${cj},${sj})' title="${t("다른 머신에 복사하거나 다른 폴더로 옮겨서 이어가기")}">${t("⇄ 옮기기")}</button>
         ${stopBtn}${pinBtn}<button class="ghost danger" onclick='del(${mj},${cj},${sj},${s.is_live})'>${t("삭제")}</button></div></div>`;
 }
 
@@ -1167,7 +1168,7 @@ async function pkSwitchMachine(mid){
 async function doMove(to,path){
   const {from,cwd,sid}=PK_MOVE, fm=mById(from), tm=mById(to);
   if(from===to && path===cwd) return toast(t("같은 폴더입니다"));
-  const ok=await uiConfirm(`${fm.name}: ${cwd}\n→ ${tm.name}: ${path}\n\n${t("옮긴 뒤 대상 머신에서 바로 이어갑니다.")}`, t("세션 옮기기"));
+  const ok=await uiConfirm(`${fm.name}: ${cwd}\n→ ${tm.name}: ${path}\n\n${to===from?t("옮긴 뒤 대상 머신에서 바로 이어갑니다."):t("대상 머신에 복사한 뒤 바로 이어갑니다. 원래 세션도 그대로 남습니다.")}`, t("세션 옮기기"));
   if(!ok) return;
   closePicker();
   showLoading(t("세션 옮기는 중…"));
@@ -1188,7 +1189,7 @@ async function doMove(to,path){
     if(j.warning) toast(j.warning);
     loadNodeFolders(fm); if(to!==from) loadNodeFolders(tm);
     if(FOLDER_MACHINE===from&&FOLDER===cwd) openFolder(from,cwd);
-    toast(t("옮겼습니다 — 이어가는 중"));
+    toast(to===from?t("옮겼습니다 — 이어가는 중"):t("복사했습니다 — 이어가는 중"));
     await resume(to,j.cwd,sid,false);
   }catch(e){ toast(t("오류: ")+e.message); }
   finally{ hideLoading(); }

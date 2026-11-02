@@ -8,8 +8,11 @@ every record names the cwd it ran in, and the manager files a session under the
 first one. So on the way in, records that ran in the old folder (or below it)
 are re-pointed at the new one; everything else in the transcript is left as is.
 
-The old copy is not deleted. It moves to ~/.claude/.csm-moved/<id>/, out of
-sight of both claude and the manager, so one id is never live in two places.
+Across machines it is a copy: the session stays where it was too, and the two
+carry on separately from then on. Within one machine it is a move, since two
+transcripts with one id on one machine would be the same session to claude.
+A copy that an incoming one replaces goes to ~/.claude/.csm-moved/<id>/, out
+of sight of both claude and the manager, rather than being deleted.
 """
 
 from __future__ import annotations
@@ -137,17 +140,36 @@ def info(session_id: str, cwd: str = "") -> dict:
     return out
 
 
+def _complete_size(f: Path) -> int:
+    """Bytes up to the end of the last whole record — a live session may be
+    halfway through writing the next one."""
+    with f.open("rb") as fh:
+        end = fh.seek(0, os.SEEK_END)
+        pos = end
+        while pos > 0:
+            step = min(pos, 1 << 16)
+            fh.seek(pos - step)
+            buf = fh.read(step)
+            i = buf.rfind(b"\n")
+            if i >= 0:
+                return pos - step + i + 1
+            pos -= step
+    return 0
+
+
 def export(session_id: str, out_path: Path) -> dict:
-    """Pack a transcript and its companion folder as a .tar.gz."""
+    """Pack a transcript and its companion folder as a .tar.gz. A running
+    session is copied as it stands, up to its last whole record."""
     if not _valid_id(session_id):
         return {"error": "bad session id"}
-    if common.is_session_live(session_id):
-        return {"error": "live"}
     f = common.find_session_file(session_id)
     if f is None:
         return {"error": "not found"}
     with tarfile.open(out_path, "w:gz", compresslevel=1) as tar:
-        tar.add(str(f), arcname=f.name)
+        ti = tar.gettarinfo(str(f), arcname=f.name)
+        ti.size = _complete_size(f)
+        with f.open("rb") as fh:
+            tar.addfile(ti, fh)
         comp = f.with_suffix("")
         if comp.is_dir():
             tar.add(str(comp), arcname=session_id)

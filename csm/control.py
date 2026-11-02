@@ -152,7 +152,7 @@ def _move_job(job, registry, src, dst, sid, cwd):
         si = _agent_json(registry, src, "GET", f"session/info?sessionId={sid}")
         if si.get("error") or not si.get("found"):
             return fail(si.get("error") or "not found")
-        if si.get("live"):
+        if si.get("live") and src == dst:
             return fail("live")
         ti = _agent_json(registry, dst, "GET", f"session/info?sessionId={sid}&cwd={quote(cwd)}")
         if not ti.get("dir_ok"):
@@ -190,12 +190,8 @@ def _move_job(job, registry, src, dst, sid, cwd):
                 res = json.loads(r.read() or b"{}")
         if res.get("error"):
             return fail(res["error"])
-        job["stage"] = "archive"
-        name = (registry["by_id"].get(dst) or {}).get("name") or dst
-        a = _agent_json(registry, src, "POST", "session/archive",
-                        {"sessionId": sid, "to": name, "cwd": res["cwd"]})
-        job.update(state="done", cwd=res["cwd"],
-                   warning=("원래 머신의 사본을 치우지 못했습니다: " + a["error"]) if a.get("error") else "")
+        # a copy: the session stays on the source machine as well
+        job.update(state="done", cwd=res["cwd"])
     except Exception as e:
         fail(f"{type(e).__name__}: {e}")
     finally:
