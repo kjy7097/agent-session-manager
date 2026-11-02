@@ -12,8 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the machine it came from as well, instead of being put away in
   `~/.claude/.csm-moved/`, and from then on the two carry on separately. A
   running session can be copied too: it goes as it stands, up to its last
-  whole record. Within one machine it is still a move, since two transcripts
-  with one id on one machine would be the same session to claude.
+  whole record. The copy gets a remote-control link of its own (claude
+  reconnects to the link the transcript names, so the records naming it are
+  left out of the copy), and both can be open at once. Within one machine it
+  is still a move, since two transcripts with one id on one machine would be
+  the same session to claude.
 
 ### Added
 - **Move a session to another machine or folder.** "⇄ Move" on a Claude

@@ -94,9 +94,22 @@ def _remapper(src: str, dst: str):
     return remap
 
 
-def _rewrite(path: Path, remap) -> int:
+def _is_bridge(line: bytes) -> bool:
+    if b'"bridge-session"' not in line:
+        return False
+    try:
+        return json.loads(line).get("type") == "bridge-session"
+    except (ValueError, AttributeError):
+        return False
+
+
+def _rewrite(path: Path, remap, drop_bridge: bool = False) -> int:
     """Re-point the cwd of every record in one transcript. Touches only the
-    cwd value; the rest of each line is copied byte for byte."""
+    cwd value; the rest of each line is copied byte for byte.
+    drop_bridge: leave out the records naming the session's remote-control
+    link. claude reconnects to the link they name on resume, so a copy that
+    kept them would share one link with the original; without them it gets
+    its own. They are not part of the conversation (no uuid, no parent)."""
     tmp = path.with_suffix(".jsonl.csm-tmp")
     n = 0
 
@@ -114,7 +127,9 @@ def _rewrite(path: Path, remap) -> int:
 
     with path.open("rb") as src, tmp.open("wb") as out:
         for line in src:
-            if b'"cwd"' in line:
+            if drop_bridge and _is_bridge(line):
+                continue
+            if remap and b'"cwd"' in line:
                 line = _CWD.sub(sub, line)
             out.write(line)
     os.replace(tmp, path)
@@ -211,15 +226,17 @@ def archive(session_id: str, note: dict | None = None) -> dict:
 
 
 def _install(session_id: str, staged_jsonl: Path, staged_comp: Path | None,
-             src_cwd: str, cwd: str, name: str) -> dict:
+             src_cwd: str, cwd: str, name: str, copy: bool = False) -> dict:
+    """copy: the original carries on elsewhere, so this one gets a
+    remote-control link of its own."""
     real = common._realpath(cwd)
     remap = _remapper(src_cwd, real) if src_cwd else None
     changed = 0
-    if remap:
-        changed += _rewrite(staged_jsonl, remap)
+    if remap or copy:
+        changed += _rewrite(staged_jsonl, remap, drop_bridge=copy)
         if staged_comp and staged_comp.is_dir():
             for j in staged_comp.rglob("*.jsonl"):
-                changed += _rewrite(j, remap)
+                changed += _rewrite(j, remap, drop_bridge=copy)
     # a copy already here (moved away earlier, now coming back) is the stale one
     if common.find_session_file(session_id) is not None:
         r = archive(session_id, {"reason": "replaced by an incoming move"})
@@ -250,7 +267,8 @@ def import_tar(session_id: str, tar_path: Path, src_cwd: str, cwd: str, name: st
         if not j.is_file():
             return {"error": "transcript missing from the package"}
         comp = stage / session_id
-        return _install(session_id, j, comp if comp.is_dir() else None, src_cwd, cwd, name)
+        return _install(session_id, j, comp if comp.is_dir() else None, src_cwd, cwd, name,
+                        copy=True)
     finally:
         shutil.rmtree(stage, ignore_errors=True)
 

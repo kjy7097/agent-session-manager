@@ -40,7 +40,7 @@ all from one browser tab. No more SSHing into each box and typing
   folder re-pointed; the project's files themselves are not copied, so the
   folder must already exist there. To another machine it is a copy: the session
   stays where it was too, even while it is running, and the two carry on
-  separately. Within one machine it is a move.
+  separately, each with its own remote-control link. Within one machine it is a move.
 - **Machines keep themselves up to date** — each agent runs `claude update`
   as soon as its machine is online after a boot, then every 6 hours. The
   control plane checks every 30s whether each remote agent runs the
