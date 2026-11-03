@@ -140,6 +140,7 @@ class Agent:
             # a restart now would lose track of these launches
             "busy": any(r.get("state") == "spawning" for r in list(_launches.values())),
             "claudeUpdate": updater.claude_status(),
+            "autoClosed": list(_auto_closed),
         }
 
     def folders(self, with_codex: bool = True) -> dict:
@@ -786,6 +787,48 @@ def _warm_summaries():
         sys.stderr.write(f"[warm] {e}\n")
 
 
+IDLE_CHECK_EVERY = 1800
+_auto_closed: list = []         # newest last: {sessionId, cwd, title, idleDays, at}
+
+
+def _close_idle(days: float):
+    """Stop sessions nobody has touched in `days`. Each one holds a claude
+    process (hundreds of MB) that a forgotten session keeps forever, and they
+    pile up until the machine runs short of memory. Untouched means nothing
+    written to its transcript since, and not started since: a session resumed
+    a minute ago from an old transcript is in use. One that is mid-turn is
+    left alone. Its transcript stays, so it can be resumed as before."""
+    time.sleep(300)
+    while True:
+        try:
+            cutoff = time.time() - days * 86400
+            for s in common.live_sessions():
+                sid = s.get("session_id")
+                if not sid or s.get("status") == "busy":
+                    continue
+                f = common.find_session_file(sid)
+                if f is None:
+                    continue
+                started = (s.get("started_at") or 0) / 1000
+                last = max(f.stat().st_mtime, started)
+                if last >= cutoff:
+                    continue
+                r = common.stop_session(sid)
+                if r.get("ok"):
+                    title = (common.session_names().get(sid)
+                             or (common.parse_session(f) or {}).get("title") or "")
+                    _auto_closed.append({"sessionId": sid, "cwd": s.get("cwd") or "",
+                                         "title": title,
+                                         "idleDays": round((time.time() - last) / 86400, 1),
+                                         "at": time.time()})
+                    del _auto_closed[:-50]
+                    sys.stderr.write(f"[idle] closed {sid} ({s.get('cwd')}), "
+                                     f"idle {(time.time() - last) / 86400:.1f} days\n")
+        except Exception as e:      # never take the agent down
+            sys.stderr.write(f"[idle] {e}\n")
+        time.sleep(IDLE_CHECK_EVERY)
+
+
 def _incoming_dir() -> Path:
     d = common.claude_home() / ".csm-incoming"
     d.mkdir(parents=True, exist_ok=True)
@@ -822,6 +865,10 @@ def main():
     httpd = ThreadingHTTPServer((host, port), _make_handler(agent))
     updater.start_claude_updates(cfg, agent.claude_path)
     threading.Thread(target=_warm_summaries, daemon=True, name="warm").start()
+    idle_days = cfg.get("closeIdleDays", 3)
+    if idle_days:
+        threading.Thread(target=_close_idle, args=(float(idle_days),), daemon=True,
+                         name="close-idle").start()
     sys.stderr.write(f"csm-agent {__version__} on http://{host}:{port} (claude={agent.claude_path})\n")
     httpd.serve_forever()
 

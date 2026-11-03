@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Forgotten sessions close themselves.** Each agent stops a running session
+  that has had nothing written to its transcript, and was not started, in the
+  last 3 days (`closeIdleDays` in the agent config; `0` turns it off). Every
+  live session holds a claude process, and sessions left open and forgotten
+  added up until a machine ran short of memory. A session mid-turn is left
+  alone; the transcript stays, so it resumes as before. Checked every 30
+  minutes; what was closed is listed as `autoClosed` in `/health`.
+
 ### Changed
 - **Moving a session to another machine now copies it.** The session stays on
   the machine it came from as well, instead of being put away in

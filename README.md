@@ -51,6 +51,12 @@ all from one browser tab. No more SSHing into each box and typing
   `GET /api/updates`. Opt out with `"autoUpdateClaude": false` in a machine's
   agent config, or `"autoUpdate": false` on a machine entry in the control
   config.
+- **Forgotten sessions close themselves** — a session left running with nothing
+  written to it for 3 days is stopped by its machine's agent, since every one
+  holds a claude process and they add up to a machine short of memory. One that
+  is mid-turn is left alone, and the transcript stays, so it resumes as before.
+  What was closed shows as `autoClosed` in the agent's `/health`. Change the
+  days with `"closeIdleDays"` in a machine's agent config (`0` turns it off).
 - **Rewind & cross-agent switch** — branch a new session from any point in a
   transcript, or continue the conversation in the *other* agent (🟧 Claude ↔ 🟢 Codex).
 - **Browse by folder**, per machine; **search sessions** by title *and conversation
